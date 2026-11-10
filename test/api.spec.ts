@@ -126,6 +126,68 @@ describe('commandes', () => {
   })
 })
 
+describe('suppressions depuis l’admin', () => {
+  it('supprime une commande, puis ne la retrouve plus', async () => {
+    const created = await post('/api/orders', {
+      email: 'cliente.a-supprimer@example.com',
+      items: [{ id: 'hongre-sf-13-ans-eure-et-loir', quantity: 1 }],
+    })
+    expect(created.status).toBe(200)
+    const { reference } = (await created.json()) as { reference: string }
+
+    const anonymous = await send('DELETE', `/api/orders/${reference}`, undefined, sameSite)
+    expect(anonymous.status).toBe(401)
+    const foreign = await send('DELETE', `/api/orders/${reference}`, undefined, admin({ origin: 'https://ailleurs.example' }))
+    expect(foreign.status).toBe(403)
+    const unknown = await send('DELETE', '/api/orders/AC-000000', undefined, admin())
+    expect(unknown.status).toBe(404)
+
+    const deleted = await send('DELETE', `/api/orders/${reference}`, undefined, admin())
+    expect(deleted.status).toBe(200)
+    await expect(deleted.json()).resolves.toEqual({ ok: true })
+
+    const row = await env.DB.prepare('SELECT reference FROM orders WHERE reference = ?').bind(reference).first()
+    expect(row).toBeNull()
+    const list = await get('/api/orders', admin())
+    const data = (await list.json()) as { orders: { reference: string }[] }
+    expect(data.orders.map((order) => order.reference)).not.toContain(reference)
+
+    // Déjà partie : la seconde suppression le dit franchement.
+    const again = await send('DELETE', `/api/orders/${reference}`, undefined, admin())
+    expect(again.status).toBe(404)
+  })
+
+  it('supprime une inscription sans toucher aux autres', async () => {
+    const created = await post('/api/newsletter', { email: 'a.supprimer@example.com', market: 'fr-ch' })
+    expect(created.status).toBe(200)
+
+    const foreign = await send(
+      'DELETE',
+      `/api/subscribers/${encodeURIComponent('a.supprimer@example.com')}`,
+      undefined,
+      admin({ origin: 'https://ailleurs.example' }),
+    )
+    expect(foreign.status).toBe(403)
+
+    const deleted = await send(
+      'DELETE',
+      `/api/subscribers/${encodeURIComponent('a.supprimer@example.com')}`,
+      undefined,
+      admin(),
+    )
+    expect(deleted.status).toBe(200)
+
+    const list = await get('/api/subscribers', admin())
+    const data = (await list.json()) as { subscribers: { email: string }[] }
+    expect(data.subscribers.map((row) => row.email)).not.toContain('a.supprimer@example.com')
+    // Les autres inscrits, et leurs données, restent en place.
+    expect(data.subscribers.map((row) => row.email)).toContain('marie.durand@example.com')
+
+    const unknown = await send('DELETE', `/api/subscribers/${encodeURIComponent('jamais.inscrit@example.com')}`, undefined, admin())
+    expect(unknown.status).toBe(404)
+  })
+})
+
 describe('demandes de visite', () => {
   it('valide les champs et enregistre la demande', async () => {
     const invalid = await post('/api/enquiries', { name: 'A', phone: '12', message: 'non' })

@@ -1603,6 +1603,43 @@ app.get('/api/orders', async (c) => {
   }
 })
 
+// Suppression d'une commande : la ligne disparaît des listes, mais le journal
+// `admin_messages` est conservé — savoir qu'on a écrit à un acheteur reste
+// utile même après le nettoyage d'une commande de test.
+app.delete('/api/orders/:reference', async (c) => {
+  const owner = await requireOwner(c)
+  if (owner instanceof Response) return owner
+  const reference = c.req.param('reference')
+  try {
+    await ensureSchema(c.env.DB)
+    const row = await c.env.DB.prepare('SELECT id FROM orders WHERE reference = ?').bind(reference).first<{ id: string }>()
+    if (!row) return c.json({ error: 'Commande introuvable.' }, 404)
+    await c.env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(row.id).run()
+    return c.json({ ok: true }, 200, { 'cache-control': 'private, no-store' })
+  } catch (error) {
+    console.error('Suppression de la commande impossible :', error)
+    return c.json({ error: 'Impossible de supprimer cette commande.' }, 500)
+  }
+})
+
+// Désinscription depuis l'admin : la demande de quelqu'un qui ne veut plus rien
+// recevoir doit pouvoir être honorée sans passer par la base à la main.
+app.delete('/api/subscribers/:email', async (c) => {
+  const owner = await requireOwner(c)
+  if (owner instanceof Response) return owner
+  const email = c.req.param('email').trim().toLowerCase()
+  try {
+    await ensureSchema(c.env.DB)
+    const row = await c.env.DB.prepare('SELECT id FROM subscribers WHERE email = ?').bind(email).first<{ id: string }>()
+    if (!row) return c.json({ error: 'Inscription introuvable.' }, 404)
+    await c.env.DB.prepare('DELETE FROM subscribers WHERE id = ?').bind(row.id).run()
+    return c.json({ ok: true }, 200, { 'cache-control': 'private, no-store' })
+  } catch (error) {
+    console.error('Suppression de l’inscription impossible :', error)
+    return c.json({ error: 'Impossible de supprimer cette inscription.' }, 500)
+  }
+})
+
 app.get('/api/subscribers', async (c) => {
   const owner = await requireOwner(c)
   if (owner instanceof Response) return owner

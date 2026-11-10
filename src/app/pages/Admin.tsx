@@ -543,7 +543,12 @@ function useOwnerList<T>(path: string, key: string, allowed: boolean) {
     }
   }, [allowed, path, key])
 
-  return { data, error }
+  // Retrait local après une suppression réussie : pas de rechargement, donc
+  // pas de saut de page, et la ligne disparaît au moment où le serveur l'a
+  // vraiment supprimée.
+  const drop = (predicate: (row: T) => boolean) => setData((rows) => rows?.filter((row) => !predicate(row)) ?? rows)
+
+  return { data, error, drop }
 }
 
 /** Charge le résumé de la semaine ; rien n'est demandé sans droit. */
@@ -925,13 +930,32 @@ function Enquiries({ allowed }: { allowed: boolean }) {
 
 /** Les commandes passées en caisse. Réservé au propriétaire. */
 function Orders({ allowed }: { allowed: boolean }) {
-  const { data: orders, error } = useOwnerList<OrderRow>('/api/orders', 'orders', allowed)
+  const { data: orders, error, drop } = useOwnerList<OrderRow>('/api/orders', 'orders', allowed)
   const [target, setTarget] = useState<OrderRow | null>(null)
+  const [notice, setNotice] = useState('')
+  const [failure, setFailure] = useState('')
   if (!allowed) return null
+
+  async function remove(order: OrderRow) {
+    if (!window.confirm(`Supprimer la commande ${order.reference} ? Les messages déjà envoyés restent au journal.`)) return
+    const response = await fetch(`/api/orders/${encodeURIComponent(order.reference)}`, { method: 'DELETE' })
+    const body = (await response.json().catch(() => ({}))) as { error?: string }
+    if (!response.ok) {
+      setFailure(body.error ?? 'Suppression impossible.')
+      setNotice('')
+      return
+    }
+    if (target?.reference === order.reference) setTarget(null)
+    drop((row) => row.reference === order.reference)
+    setFailure('')
+    setNotice(`Commande ${order.reference} supprimée.`)
+  }
 
   return (
     <section className="mt-8">
       {orders && <p className="text-[13px] text-muted">{orders.length} commande{orders.length > 1 ? 's' : ''}</p>}
+      {notice && <p className="mt-2 text-[13px] text-muted">{notice}</p>}
+      {failure && <p className="mt-2 text-[13px] text-accent">{failure}</p>}
 
       {error && <p className="mt-4 text-[14px] text-accent">{error}</p>}
       {!orders && !error && <p className="mt-4 text-[14px] text-muted">Chargement des commandes…</p>}
@@ -966,6 +990,14 @@ function Orders({ allowed }: { allowed: boolean }) {
               >
                 <Mail className="size-4" /> Écrire à l’acheteur
               </button>
+              <button
+                type="button"
+                onClick={() => remove(order)}
+                aria-label={`Supprimer la commande ${order.reference}`}
+                className="inline-flex items-center gap-1.5 text-[13px] text-muted underline-offset-2 hover:text-accent hover:underline"
+              >
+                <Trash2 className="size-4" /> Supprimer
+              </button>
               {!order.notified && <NotifyMissed />}
             </div>
           </li>
@@ -977,13 +1009,32 @@ function Orders({ allowed }: { allowed: boolean }) {
 
 /** Les inscrits au pied de page, jusqu'ici validés puis jetés. */
 function Subscribers({ allowed }: { allowed: boolean }) {
-  const { data: subscribers, error } = useOwnerList<Subscriber>('/api/subscribers', 'subscribers', allowed)
+  const { data: subscribers, error, drop } = useOwnerList<Subscriber>('/api/subscribers', 'subscribers', allowed)
   const [target, setTarget] = useState<Subscriber | null>(null)
+  const [notice, setNotice] = useState('')
+  const [failure, setFailure] = useState('')
   if (!allowed) return null
+
+  async function remove(subscriber: Subscriber) {
+    if (!window.confirm(`Supprimer l’inscription de ${subscriber.email} ? Cette adresse ne recevra plus vos messages.`)) return
+    const response = await fetch(`/api/subscribers/${encodeURIComponent(subscriber.email)}`, { method: 'DELETE' })
+    const body = (await response.json().catch(() => ({}))) as { error?: string }
+    if (!response.ok) {
+      setFailure(body.error ?? 'Suppression impossible.')
+      setNotice('')
+      return
+    }
+    if (target?.email === subscriber.email) setTarget(null)
+    drop((row) => row.email === subscriber.email)
+    setFailure('')
+    setNotice(`${subscriber.email} n’est plus inscrit.`)
+  }
 
   return (
     <section className="mt-8">
       {subscribers && <p className="text-[13px] text-muted">{subscribers.length} adresse{subscribers.length > 1 ? 's' : ''}</p>}
+      {notice && <p className="mt-2 text-[13px] text-muted">{notice}</p>}
+      {failure && <p className="mt-2 text-[13px] text-accent">{failure}</p>}
 
       {error && <p className="mt-4 text-[14px] text-accent">{error}</p>}
       {!subscribers && !error && <p className="mt-4 text-[14px] text-muted">Chargement des inscriptions…</p>}
@@ -1006,13 +1057,23 @@ function Subscribers({ allowed }: { allowed: boolean }) {
                 {shortDate(subscriber.createdAt)} · {marketName(subscriber.market)}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setTarget(subscriber)}
-              className="inline-flex items-center gap-1.5 text-[13px] text-muted underline-offset-2 hover:text-fg hover:underline"
-            >
-              <Mail className="size-4" /> Écrire
-            </button>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <button
+                type="button"
+                onClick={() => setTarget(subscriber)}
+                className="inline-flex items-center gap-1.5 text-[13px] text-muted underline-offset-2 hover:text-fg hover:underline"
+              >
+                <Mail className="size-4" /> Écrire
+              </button>
+              <button
+                type="button"
+                onClick={() => remove(subscriber)}
+                aria-label={`Supprimer l’inscription de ${subscriber.email}`}
+                className="inline-flex items-center gap-1.5 text-[13px] text-muted underline-offset-2 hover:text-accent hover:underline"
+              >
+                <Trash2 className="size-4" /> Supprimer
+              </button>
+            </div>
           </li>
         ))}
       </ul>

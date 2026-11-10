@@ -1,7 +1,8 @@
 name: Vérifications
 
-# Le typage et le build suffisent à attraper l'essentiel : le Worker et les
-# assets sont produits par la même commande que celle utilisée pour déployer.
+# Typage, tests d'intégration des routes API (dans workerd, avec une base D1
+# locale) puis build : le Worker et les assets sont produits par la même
+# commande que celle utilisée pour déployer.
 on:
   push:
 
@@ -26,6 +27,9 @@ jobs:
 
       - name: Typage
         run: npm run typecheck
+
+      - name: Tests
+        run: npm test
 
       - name: Build
         run: npm run build

@@ -10,9 +10,22 @@ propriétaire par e-mail.
 
 ## Vérifications
 
-`.github/workflows/verifications.yml` lance `npm run typecheck` puis
-`npm run build` à chaque poussée, sur Node 24 ; une poussée rouge se voit dans
-l'onglet Actions plutôt qu'au moment du déploiement. Le badge en tête de ce
+`.github/workflows/verifications.yml` lance `npm run typecheck`, `npm test`
+puis `npm run build` à chaque poussée, sur Node 24 ; une poussée rouge se voit
+dans l'onglet Actions plutôt qu'au moment du déploiement.
+
+`npm test` fait tourner les tests d'intégration de `test/api.spec.ts` dans
+**workerd**, le runtime du Worker déployé, avec une base D1 et un bucket R2
+émulés par Miniflare : le vrai handler, de vraies requêtes, un vrai SQL. Aucun
+réseau, aucun secret de production. La configuration est dans
+`vitest.config.ts` (identifiant d'admin de test, pas de clé Resend) et
+`wrangler.test.jsonc` (même date de compatibilité que `wrangler.jsonc`, sans
+les assets). Couvert : santé et sitemap, inscriptions (normalisation, doublon,
+liste réservée), commandes (total recalculé depuis le catalogue, prix du
+navigateur ignoré), demandes de visite, connexion admin (403 hors origine,
+401 mauvais mot de passe, session listée et refermée), modèles (semis, édition,
+validations) et envoi de messages (jetons remplis, journal `admin_messages`,
+statut « sans clé »). Le badge en tête de ce
 fichier affiche l'état du workflow sur `main` — `passing` ou `failing` — le
 résultat du dernier commit poussé sur cette branche, et ouvre le workflow au
 clic. GitHub ne sert ce badge que pour un dépôt public : le garder privé

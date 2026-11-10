@@ -1,0 +1,19 @@
+{
+  // La même configuration que `wrangler.jsonc`, sans les assets : les tests
+  // visent les routes `/api/*`. D1 et R2 sont émulés par Miniflare, en mémoire
+  // ou dans un fichier temporaire, jamais la base de la prévisualisation.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "achat-cheval-tests",
+  "main": "src/worker/index.ts",
+  // La même date que le déploiement (`wrangler.jsonc`) : les tests tournent
+  // avec les mêmes règles de compatibilité que la version en ligne.
+  "compatibility_date": "2026-09-29",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "achat-cheval-tests",
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "achat-cheval-photos-tests" }]
+}

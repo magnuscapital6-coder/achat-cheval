@@ -239,6 +239,12 @@ Quand un e-mail d'alerte n'est pas parti, la ligne le dit (« Alerte e-mail non
 envoyée ») au lieu de laisser l'échec dans les logs : c'est le repère à
 surveiller si Resend est mal configuré.
 
+Chaque ligne peut être supprimée — commande de test, adresse qui demande à ne
+plus rien recevoir — après confirmation : `DELETE /api/orders/:reference` et
+`DELETE /api/subscribers/:email`, réservés au propriétaire (session + même
+origine). La ligne quitte la liste immédiatement, et le journal
+`admin_messages` est conservé pour garder la trace des messages déjà envoyés.
+
 ### Écrire aux clients
 
 L'admin écrit lui-même aux inscrits et aux acheteurs, sans quitter le site.

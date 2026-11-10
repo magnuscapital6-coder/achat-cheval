@@ -31,7 +31,14 @@ L'envoi réel est simulé : le test remplace `globalThis.fetch` le temps d'un ca
 et répond à la place de Resend — succès (`200`, statut « envoye », en-tête
 `Bearer`, objet et texte réellement transmis) comme refus (`422`, statut
 « echec », message conservé). Aucun e-mail ne sort de la CI, et aucun réseau
-donc aucun faux négatif si Resend tombe. Le badge en tête de ce
+donc aucun faux négatif si Resend tombe.
+
+Même traitement pour les e-mails de commande : alerte au propriétaire (référence,
+marché, total, lignes d'articles avec l'option de transport) et accusé de
+réception à l'acheteur sont vérifiés avec le même mock, y compris `notified_at`
+rempli seulement si l'alerte est réellement partie. Un Resend en erreur n'empêche
+ni la commande d'être enregistrée, ni l'accusé de partir quand le propriétaire
+n'a pas d'adresse configurée. Le badge en tête de ce
 fichier affiche l'état du workflow sur `main` — `passing` ou `failing` — le
 résultat du dernier commit poussé sur cette branche, et ouvre le workflow au
 clic. GitHub ne sert ce badge que pour un dépôt public : le garder privé

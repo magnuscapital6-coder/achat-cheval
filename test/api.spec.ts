@@ -398,6 +398,104 @@ describe('envoi réussi via Resend', () => {
   })
 })
 
+// Les e-mails de commande partent à la création : alerte au propriétaire et
+// accusé de réception à l'acheteur, envoyés en parallèle. Même simulation ici.
+const ownerInbox = 'proprietaire@example.com'
+
+describe('e-mails de commande', () => {
+  const order = (email: string) =>
+    post('/api/orders', {
+      email,
+      market: 'fr-be',
+      items: [{ id: 'hongre-sf-13-ans-eure-et-loir', quantity: 2, option: 'Transport 300 km' }],
+    })
+
+  it('alerte le propriétaire et confirme à l’acheteur', async () => {
+    env.RESEND_API_KEY = 'cle-de-test'
+    env.ENQUIRY_NOTIFY_EMAIL = ownerInbox
+    const resend = mockResend(200)
+    try {
+      const response = await order('acheteur.commandes@example.com')
+      expect(response.status).toBe(200)
+      const { reference, total } = (await response.json()) as { reference: string; total: number }
+      expect(total).toBe(58000)
+
+      expect(resend.calls).toHaveLength(2)
+      // Alerte au propriétaire : la commande entière, prête à traiter.
+      const alert = resend.calls.find((mail) => mail.to.includes(ownerInbox))
+      expect(alert?.authorization).toBe('Bearer cle-de-test')
+      expect(alert?.subject).toBe(`Commande ${reference} — ${total} €`)
+      expect(plain(alert?.text ?? '')).toContain('Nouvelle commande ' + reference)
+      expect(plain(alert?.text ?? '')).toContain('Marché : Belgique')
+      expect(plain(alert?.text ?? '')).toContain('Total : 58000 €')
+      // La ligne d'article garde l'option de transport choisie en caisse.
+      expect(plain(alert?.text ?? '')).toContain('2 × Hongre Selle Français, 13 ans (Transport 300 km) — 58000 €')
+      expect(plain((alert?.html ?? '').replace(/<[^>]+>/g, ' '))).toContain(reference)
+
+      // Accusé de réception : à l'acheteur, avec sa référence et rien d'autre.
+      const receipt = resend.calls.find((mail) => mail.to.includes('acheteur.commandes@example.com'))
+      expect(receipt?.subject).toBe(`Votre commande ${reference} — achat-cheval`)
+      expect(plain(receipt?.text ?? '')).toContain('Merci pour votre commande ' + reference)
+      expect(plain(receipt?.text ?? '')).toContain('Total : 58000 €')
+      expect(receipt?.text).not.toContain(ownerInbox)
+
+      // `notified_at` n'est rempli que parce que l'alerte est réellement partie.
+      const row = await env.DB.prepare('SELECT notified_at FROM orders WHERE reference = ?').bind(reference).first<{
+        notified_at: string
+      }>()
+      expect(row?.notified_at).toBeTruthy()
+    } finally {
+      resend.restore()
+      env.RESEND_API_KEY = ''
+      env.ENQUIRY_NOTIFY_EMAIL = ''
+    }
+  })
+
+  it('enregistre la commande et laisse `notified_at` vide si Resend refuse', async () => {
+    env.RESEND_API_KEY = 'cle-refusee'
+    env.ENQUIRY_NOTIFY_EMAIL = ownerInbox
+    const resend = mockResend(500, { message: 'Erreur interne', name: 'internal_error' })
+    try {
+      const response = await order('acheteur.refus@example.com')
+      // Un e-mail qui ne part pas ne doit jamais faire perdre la commande.
+      expect(response.status).toBe(200)
+      const { reference } = (await response.json()) as { reference: string }
+      expect(resend.calls).toHaveLength(2)
+
+      const row = await env.DB.prepare('SELECT email, total, notified_at FROM orders WHERE reference = ?')
+        .bind(reference)
+        .first<{ email: string; total: number; notified_at: string }>()
+      expect(row).toMatchObject({ email: 'acheteur.refus@example.com', total: 58000, notified_at: '' })
+    } finally {
+      resend.restore()
+      env.RESEND_API_KEY = ''
+      env.ENQUIRY_NOTIFY_EMAIL = ''
+    }
+  })
+
+  it('envoie quand même l’accusé quand l’adresse du propriétaire manque', async () => {
+    env.RESEND_API_KEY = 'cle-de-test'
+    env.ENQUIRY_NOTIFY_EMAIL = ''
+    const resend = mockResend(200)
+    try {
+      const response = await order('acheteur.sans-alerte@example.com')
+      expect(response.status).toBe(200)
+
+      // Une seule sortie : l'acheteur, pas d'alerte faute de destinataire.
+      expect(resend.calls).toHaveLength(1)
+      expect(resend.calls[0]?.to).toEqual(['acheteur.sans-alerte@example.com'])
+
+      const row = await env.DB.prepare('SELECT notified_at FROM orders ORDER BY created_at DESC LIMIT 1').first<{
+        notified_at: string
+      }>()
+      expect(row?.notified_at).toBe('')
+    } finally {
+      resend.restore()
+      env.RESEND_API_KEY = ''
+    }
+  })
+})
+
 async function latestReference() {
   const row = await env.DB.prepare('SELECT reference FROM orders ORDER BY created_at DESC LIMIT 1').first<{ reference: string }>()
   if (!row) throw new Error('Aucune commande en base pour le test.')

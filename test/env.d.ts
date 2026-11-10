@@ -9,5 +9,7 @@ declare namespace Cloudflare {
     APP_ORIGIN: string
     ADMIN_CREDENTIALS: string
     RESEND_API_KEY?: string
+    ENQUIRY_NOTIFY_EMAIL?: string
+    ENQUIRY_FROM_EMAIL?: string
   }
 }

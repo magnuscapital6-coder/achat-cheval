@@ -1,4 +1,4 @@
-import { Check, ImagePlus, LogIn, LogOut, Pencil, Trash2, X } from 'lucide-react'
+import { Check, ImagePlus, LogIn, LogOut, Mail, Pencil, Send, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
@@ -36,6 +36,10 @@ type OrderRow = {
 }
 
 type Subscriber = { email: string; createdAt: string; market: string }
+
+/** Un message type, éditable depuis l'admin et rempli à l'envoi. */
+type MessageTemplate = { key: string; label: string; audience: TemplateAudience; subject: string; body: string; updatedAt: string }
+type TemplateAudience = 'inscription' | 'commande'
 
 /** Un appareil connecté à l'admin, vu depuis `/api/admin/sessions`. */
 type AdminSession = { id: string; createdAt: string; expiresAt: string; device: string; ip: string; current: boolean }
@@ -83,6 +87,7 @@ const TABS = [
   { key: 'demandes', label: 'Demandes de visite', title: 'Demandes de visite' },
   { key: 'commandes', label: 'Commandes', title: 'Commandes' },
   { key: 'inscriptions', label: 'Inscriptions', title: 'Inscriptions' },
+  { key: 'modeles', label: 'Modèles', title: 'Modèles de messages' },
   { key: 'sessions', label: 'Sessions', title: 'Sessions ouvertes' },
 ] as const
 
@@ -248,6 +253,8 @@ export function Admin() {
                 ? 'Les commandes passées en caisse, de la plus récente à la plus ancienne.'
                 : tab === 'inscriptions'
                   ? 'Les adresses inscrites en pied de page, de la plus récente à la plus ancienne.'
+                  : tab === 'modeles'
+                    ? 'Les messages types de la plateforme : écrivez-les une fois, ils se remplissent seuls à l’envoi avec l’adresse, la date et, pour une commande, sa référence, son total et ses articles.'
                   : 'Les appareils connectés avec le mot de passe, de la plus récente à la plus ancienne. Fermer une session la coupe sur-le-champ, même si le navigateur garde son cookie ; l’empreinte du jeton disparaît aussi de la base. Seules les cinq connexions les plus récentes sont gardées : la plus ancienne s’efface quand une sixième arrive.'}
         </p>
       )}
@@ -490,6 +497,7 @@ export function Admin() {
       {tab === 'demandes' && <Enquiries allowed={allowed} />}
       {tab === 'commandes' && <Orders allowed={allowed} />}
       {tab === 'inscriptions' && <Subscribers allowed={allowed} />}
+      {tab === 'modeles' && <Templates allowed={allowed} />}
       {tab === 'sessions' && (
         <Sessions
           allowed={allowed}
@@ -918,6 +926,7 @@ function Enquiries({ allowed }: { allowed: boolean }) {
 /** Les commandes passées en caisse. Réservé au propriétaire. */
 function Orders({ allowed }: { allowed: boolean }) {
   const { data: orders, error } = useOwnerList<OrderRow>('/api/orders', 'orders', allowed)
+  const [target, setTarget] = useState<OrderRow | null>(null)
   if (!allowed) return null
 
   return (
@@ -928,6 +937,12 @@ function Orders({ allowed }: { allowed: boolean }) {
       {!orders && !error && <p className="mt-4 text-[14px] text-muted">Chargement des commandes…</p>}
       {orders && orders.length === 0 && (
         <p className="mt-3 text-[14px] text-muted">Aucune commande pour l’instant. Chaque passage en caisse est enregistré ici.</p>
+      )}
+
+      {/* Écrire depuis la commande : les modèles de paiement y remplissent
+          eux-mêmes la référence, le total et les articles. */}
+      {target && (
+        <MessageComposer key={target.reference} to={target.email} audience="commande" order={target} onClose={() => setTarget(null)} />
       )}
 
       <ul className="mt-6 divide-y divide-line">
@@ -943,7 +958,16 @@ function Orders({ allowed }: { allowed: boolean }) {
             <p className="mt-1 text-[13.5px] text-muted">
               {order.items.map((line) => `${line.quantity} × ${line.name}${line.option ? ` (${line.option})` : ''}`).join(' · ')}
             </p>
-            {!order.notified && <NotifyMissed />}
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <button
+                type="button"
+                onClick={() => setTarget(order)}
+                className="inline-flex items-center gap-1.5 text-[13px] text-muted underline-offset-2 hover:text-fg hover:underline"
+              >
+                <Mail className="size-4" /> Écrire à l’acheteur
+              </button>
+              {!order.notified && <NotifyMissed />}
+            </div>
           </li>
         ))}
       </ul>
@@ -954,6 +978,7 @@ function Orders({ allowed }: { allowed: boolean }) {
 /** Les inscrits au pied de page, jusqu'ici validés puis jetés. */
 function Subscribers({ allowed }: { allowed: boolean }) {
   const { data: subscribers, error } = useOwnerList<Subscriber>('/api/subscribers', 'subscribers', allowed)
+  const [target, setTarget] = useState<Subscriber | null>(null)
   if (!allowed) return null
 
   return (
@@ -966,19 +991,306 @@ function Subscribers({ allowed }: { allowed: boolean }) {
         <p className="mt-3 text-[14px] text-muted">Aucune inscription pour l’instant. Les adresses du pied de page arrivent ici.</p>
       )}
 
+      {target && (
+        <MessageComposer key={target.email} to={target.email} audience="inscription" onClose={() => setTarget(null)} />
+      )}
+
       <ul className="mt-6 divide-y divide-line">
         {subscribers?.map((subscriber) => (
-          <li key={subscriber.email} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
-            <a href={`mailto:${subscriber.email}`} className="text-[14.5px] hover:underline">
-              {subscriber.email}
-            </a>
-            <p className="text-[12.5px] text-faint">
-              {shortDate(subscriber.createdAt)} · {marketName(subscriber.market)}
-            </p>
+          <li key={subscriber.email} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 py-3">
+            <div className="min-w-0">
+              <a href={`mailto:${subscriber.email}`} className="break-all text-[14.5px] hover:underline">
+                {subscriber.email}
+              </a>
+              <p className="mt-0.5 text-[12.5px] text-faint">
+                {shortDate(subscriber.createdAt)} · {marketName(subscriber.market)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTarget(subscriber)}
+              className="inline-flex items-center gap-1.5 text-[13px] text-muted underline-offset-2 hover:text-fg hover:underline"
+            >
+              <Mail className="size-4" /> Écrire
+            </button>
           </li>
         ))}
       </ul>
     </section>
+  )
+}
+
+/**
+ * Les modèles tels qu'ils s'affichent dans l'admin : les jetons `{{...}}`
+ * prennent ici la valeur de la ligne d'où l'on écrit, pour relire le message
+ * avant de l'envoyer. Le serveur refait le même remplacement sur ses données.
+ */
+function fillPreview(value: string, to: string, order?: OrderRow) {
+  const values: Record<string, string> = {
+    email: to,
+    boutique: 'achat-cheval',
+    lien: window.location.origin,
+    date: new Date().toLocaleDateString('fr-FR', { dateStyle: 'long' }),
+  }
+  if (order) {
+    values.reference = order.reference
+    values.total = money(order.total)
+    values.articles = order.items
+      .map((line) => `· ${line.quantity} × ${line.name}${line.option ? ` (${line.option})` : ''} — ${money(line.price * line.quantity)}`)
+      .join('\n')
+  }
+  return value.replace(/\{\{\s*([a-z]+)\s*\}\}/gi, (match, name: string) => values[name.toLowerCase()] ?? match)
+}
+
+const TEMPLATE_HINT = '{{email}}, {{date}}, {{boutique}}, {{lien}}'
+const ORDER_HINT = `${TEMPLATE_HINT}, {{reference}}, {{total}}, {{articles}}`
+
+/**
+ * Le composeur, partagé par les inscriptions et les commandes : on choisit un
+ * modèle, on retouche, on envoie. Le texte parti reste dans le journal.
+ */
+function MessageComposer({ to, audience, order, onClose }: { to: string; audience: TemplateAudience; order?: OrderRow; onClose: () => void }) {
+  const [templates, setTemplates] = useState<MessageTemplate[] | null>(null)
+  const [templateKey, setTemplateKey] = useState('')
+  const [subject, setSubject] = useState('')
+  const [message, setMessage] = useState('')
+  const [state, setState] = useState<'idle' | 'sending'>('idle')
+  const [notice, setNotice] = useState('')
+  const [error, setError] = useState('')
+
+  function choose(template: MessageTemplate) {
+    setTemplateKey(template.key)
+    setSubject(fillPreview(template.subject, to, order))
+    setMessage(fillPreview(template.body, to, order))
+    setNotice('')
+    setError('')
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const response = await fetch('/api/admin/templates')
+        const body = (await response.json()) as { templates?: MessageTemplate[]; error?: string }
+        if (!response.ok) throw new Error(body.error ?? 'Modèles indisponibles.')
+        if (cancelled) return
+        const usable = (body.templates ?? []).filter((template) => template.audience === audience)
+        setTemplates(usable)
+        const first = usable[0]
+        if (first) {
+          setTemplateKey(first.key)
+          setSubject(fillPreview(first.subject, to, order))
+          setMessage(fillPreview(first.body, to, order))
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Modèles indisponibles.')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [audience, to, order])
+
+  async function send(event: FormEvent) {
+    event.preventDefault()
+    setState('sending')
+    setError('')
+    setNotice('')
+    try {
+      const response = await fetch('/api/admin/messages', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ to, template: templateKey, subject, body: message, reference: order?.reference }),
+      })
+      const body = (await response.json().catch(() => ({}))) as { error?: string }
+      if (!response.ok) throw new Error(body.error ?? 'Envoi impossible.')
+      setNotice(`Message envoyé à ${to}.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Envoi impossible.')
+    } finally {
+      setState('idle')
+    }
+  }
+
+  return (
+    <form onSubmit={send} className="mt-6 rounded-dialog border border-line bg-surface p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[14px] font-medium">Écrire à {to}</p>
+          <p className="mt-0.5 text-[12.5px] text-faint">
+            {order ? `Commande ${order.reference} · ${money(order.total)}` : 'Inscription au pied de page'}
+          </p>
+        </div>
+        <button type="button" onClick={onClose} className="inline-flex items-center gap-1.5 text-[13px] text-muted transition-colors hover:text-fg">
+          <X className="size-4" /> Fermer
+        </button>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-4">
+        <label className="block">
+          <span className={label}>Modèle</span>
+          <select
+            value={templateKey}
+            onChange={(event) => {
+              const found = templates?.find((template) => template.key === event.target.value)
+              if (found) choose(found)
+            }}
+            className={inputClass}
+            disabled={!templates?.length}
+          >
+            {(templates ?? []).map((template) => (
+              <option key={template.key} value={template.key}>
+                {template.label}
+              </option>
+            ))}
+          </select>
+          <p className={hint}>Changer de modèle remplace l’objet et le texte ; vos retouches tiennent jusqu’au changement.</p>
+        </label>
+
+        <label className="block">
+          <span className={label}>Objet</span>
+          <input value={subject} onChange={(event) => setSubject(event.target.value)} maxLength={160} className={inputClass} />
+        </label>
+
+        <label className="block">
+          <span className={label}>Message</span>
+          <textarea
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            rows={12}
+            maxLength={5000}
+            className={`${inputClass} min-h-56 resize-y py-3 leading-relaxed`}
+          />
+          <p className={hint}>
+            {audience === 'commande' ? ORDER_HINT : TEMPLATE_HINT} prennent leur valeur à l’envoi.
+          </p>
+        </label>
+
+        {error && (
+          <p role="alert" className="text-[13.5px] text-accent">
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p role="status" className="text-[13.5px] text-muted">
+            {notice}
+          </p>
+        )}
+
+        <Button type="submit" loading={state === 'sending'} disabled={!subject.trim() || message.trim().length < 10} className="self-start">
+          <Send /> Envoyer
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+/** Les modèles, groupés par origine : inscription ou commande. */
+function Templates({ allowed }: { allowed: boolean }) {
+  const { data: templates, error } = useOwnerList<MessageTemplate>('/api/admin/templates', 'templates', allowed)
+  if (!allowed) return null
+
+  const groups: { audience: TemplateAudience; title: string; note: string }[] = [
+    { audience: 'inscription', title: 'Inscriptions', note: 'Ouverts depuis la liste des inscriptions au pied de page.' },
+    { audience: 'commande', title: 'Commandes', note: 'Ouverts depuis une commande : la référence, le total et les articles s’y remplissent seuls.' },
+  ]
+
+  return (
+    <section className="mt-8">
+      <p className="text-[13px] text-muted">Les textes ci-dessous sont ceux qui partent : modifiez-les, ils valent dès le prochain envoi.</p>
+      {error && <p className="mt-4 text-[14px] text-accent">{error}</p>}
+      {!templates && !error && <p className="mt-4 text-[14px] text-muted">Chargement des modèles…</p>}
+      {groups.map((group) => {
+        const rows = templates?.filter((template) => template.audience === group.audience) ?? []
+        if (!templates || rows.length === 0) return null
+        return (
+          <div key={group.audience} className="mt-8">
+            <div className="border-b border-line pb-2">
+              <h2 className="text-[15px] font-medium">{group.title}</h2>
+              <p className="mt-1 text-[12.5px] text-faint">{group.note}</p>
+            </div>
+            <div className="mt-4 flex flex-col gap-4">
+              {rows.map((template) => (
+                <TemplateCard key={template.key} template={template} />
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </section>
+  )
+}
+
+/** Un modèle qu'on relit et qu'on réécrit ; rien ne part d'ici. */
+function TemplateCard({ template }: { template: MessageTemplate }) {
+  const [subject, setSubject] = useState(template.subject)
+  const [message, setMessage] = useState(template.body)
+  const [state, setState] = useState<'idle' | 'saving'>('idle')
+  const [notice, setNotice] = useState('')
+  const [error, setError] = useState('')
+
+  async function save(event: FormEvent) {
+    event.preventDefault()
+    setState('saving')
+    setError('')
+    setNotice('')
+    try {
+      const response = await fetch(`/api/admin/templates/${encodeURIComponent(template.key)}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ subject, body: message }),
+      })
+      const body = (await response.json().catch(() => ({}))) as { error?: string }
+      if (!response.ok) throw new Error(body.error ?? 'Enregistrement impossible.')
+      setNotice('Modèle enregistré.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Enregistrement impossible.')
+    } finally {
+      setState('idle')
+    }
+  }
+
+  return (
+    <form onSubmit={save} className="rounded-dialog border border-line bg-surface p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <p className="text-[14px] font-medium">{template.label}</p>
+        <code className="text-[11.5px] text-faint">{template.key}</code>
+      </div>
+
+      <label className="mt-3 block">
+        <span className={label}>Objet</span>
+        <input value={subject} onChange={(event) => setSubject(event.target.value)} maxLength={160} className={inputClass} />
+      </label>
+
+      <label className="mt-3 block">
+        <span className={label}>Message</span>
+        <textarea
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+          rows={10}
+          maxLength={5000}
+          className={`${inputClass} min-h-48 resize-y py-3 leading-relaxed`}
+        />
+      </label>
+
+      {error && (
+        <p role="alert" className="mt-3 text-[13px] text-accent">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p role="status" className="mt-3 text-[13px] text-muted">
+          {notice}
+        </p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <Button type="submit" variant="secondary" size="sm" loading={state === 'saving'}>
+          Enregistrer
+        </Button>
+        {template.updatedAt && <p className="text-[12px] text-faint">Modifié le {shortDate(template.updatedAt)}</p>}
+      </div>
+    </form>
   )
 }
 

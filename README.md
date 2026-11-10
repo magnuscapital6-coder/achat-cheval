@@ -213,6 +213,37 @@ Quand un e-mail d'alerte n'est pas parti, la ligne le dit (« Alerte e-mail non
 envoyée ») au lieu de laisser l'échec dans les logs : c'est le repère à
 surveiller si Resend est mal configuré.
 
+### Écrire aux clients
+
+L'admin écrit lui-même aux inscrits et aux acheteurs, sans quitter le site.
+
+- « Inscriptions » : le bouton « Écrire » d'une ligne ouvre un message pour
+  cette adresse. « Commandes » : « Écrire à l'acheteur » ouvre le même
+  composeur avec la commande en contexte (référence, total, articles affichés
+  sous le titre).
+- Le texte part d'un **modèle éditable** (table `message_templates`, créés au
+  premier usage) : bienvenue à l'inscription, nouvelles fiches de la semaine,
+  relance de paiement, paiement reçu, commande expédiée. L'onglet « Modèles »
+  les réécrit — l'objet et le corps enregistrés valent pour l'envoi suivant,
+  sans redéploiement. Changer de modèle dans le composeur recharge l'objet et
+  le texte ; les retouches faites ensuite partent telles quelles.
+- Jetons remplacés à l'envoi : `{{email}}`, `{{date}}`, `{{boutique}}`,
+  `{{lien}}`, et pour une commande `{{reference}}`, `{{total}}`,
+  `{{articles}}`. La référence, les lignes et le total sont **relus en base** :
+  ce qui part ne dépend pas des valeurs envoyées par le navigateur. Un jeton
+  inconnu reste visible plutôt que d'être vidé en silence.
+- `GET /api/admin/templates` lit les modèles, `PUT /api/admin/templates/:key`
+  en enregistre un (objet ≤ 160 caractères, texte ≤ 5 000),
+  `POST /api/admin/messages` envoie — ces trois routes demandent la session
+  admin et la même origine que le reste de l'admin.
+- Sans `RESEND_API_KEY`, ou si Resend refuse, le message est tout de même
+  **journalisé** dans `admin_messages` et l'écran l'affiche : rien ne part
+  silencieusement. Les 200 derniers envois gardent l'adresse, le modèle,
+  l'objet, le texte réellement parti (jetons remplis) et leur statut.
+- Les acheteurs n'ont pas de compte : le composeur écrit à l'adresse de la
+  commande. Pour encaisser réellement, branchez Stripe dans le même handler et
+  gardez ces modèles pour les relances.
+
 Relire les demandes enregistrées en local :
 
 ```sh
@@ -234,6 +265,7 @@ npx wrangler d1 execute achat-cheval --local \
   `/api/admin/logout`, `/api/admin/sessions`,
   `/api/admin/sessions/close`, `/api/admin/sessions/close-others`,
   `/api/admin/failures`, `/api/admin/failures/clear`, `/api/admin/logins`,
+  `/api/admin/templates`, `/api/admin/messages`,
   `/api/listings`,
   `/api/photo/:id`, `/api/enquiries`
   (D1 + Resend), `/api/views`, `/api/summary` et `/api/newsletter`.

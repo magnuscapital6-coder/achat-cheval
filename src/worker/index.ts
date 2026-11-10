@@ -159,6 +159,35 @@ function ensureSchema(db: D1Database) {
            notified_at TEXT NOT NULL DEFAULT ''
          )`,
       ),
+      // Modèles de messages : le texte s'édite depuis l'admin, la clé reste
+      // stable pour que les boutons sachent quel modèle ouvrir.
+      db.prepare(
+        `CREATE TABLE IF NOT EXISTS message_templates (
+           key TEXT PRIMARY KEY,
+           label TEXT NOT NULL,
+           audience TEXT NOT NULL DEFAULT 'inscription',
+           subject TEXT NOT NULL,
+           body TEXT NOT NULL,
+           updated_at TEXT NOT NULL DEFAULT ''
+         )`,
+      ),
+      // Journal des envois : un message parti (ou refusé) laisse une trace,
+      // même si la boîte du destinataire ne le montre plus.
+      db.prepare(
+        `CREATE TABLE IF NOT EXISTS admin_messages (
+           id INTEGER PRIMARY KEY AUTOINCREMENT,
+           created_at TEXT NOT NULL,
+           email TEXT NOT NULL,
+           template_key TEXT NOT NULL DEFAULT '',
+           subject TEXT NOT NULL,
+           body TEXT NOT NULL,
+           reference TEXT NOT NULL DEFAULT '',
+           status TEXT NOT NULL DEFAULT 'envoye',
+           detail TEXT NOT NULL DEFAULT ''
+         )`,
+      ),
+      db.prepare('CREATE INDEX IF NOT EXISTS admin_messages_id ON admin_messages (id DESC)'),
+      db.prepare('CREATE INDEX IF NOT EXISTS admin_messages_email ON admin_messages (email, id DESC)'),
     ])
     // Tables créées avant l'édition : les colonnes arrivent ici, sans migration
     // à lancer à la main. L'erreur « column already exists » est sans gravité.
@@ -178,6 +207,15 @@ function ensureSchema(db: D1Database) {
     // Connexions déjà enregistrées sans leur navigateur : la colonne arrive
     // vide, la ligne s'affiche alors avec la seule adresse.
     await db.prepare("ALTER TABLE admin_logins ADD COLUMN user_agent TEXT NOT NULL DEFAULT ''").run().catch(() => undefined)
+    // Modèles livrés avec le site : `INSERT OR IGNORE` pour ne jamais écraser
+    // un texte déjà personnalisé depuis l'admin.
+    await db.batch(
+      DEFAULT_TEMPLATES.map((template) =>
+        db
+          .prepare('INSERT OR IGNORE INTO message_templates (key, label, audience, subject, body, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+          .bind(template.key, template.label, template.audience, template.subject, template.body, ''),
+      ),
+    )
   })().catch((error) => {
     schemaReady = undefined
     throw error
@@ -383,6 +421,156 @@ async function confirmOrder(env: Env, order: Order) {
   <p style="margin:16px 0 0">Nous vous écrivons à cette adresse pour la suite. Une question ? Répondez à cet e-mail.</p>
 </div>`,
   })
+}
+
+// ——— Messages aux clients ————————————————————————————————————————
+// L'admin écrit aux inscrits et aux acheteurs à partir de modèles gardés en
+// base : le texte se modifie depuis l'écran « Modèles », sans redéploiement.
+
+type TemplateAudience = 'inscription' | 'commande'
+
+type MessageTemplate = { key: string; label: string; audience: TemplateAudience; subject: string; body: string }
+
+type TemplateRow = { key: string; label: string; audience: string; subject: string; body: string; updated_at: string }
+
+const MESSAGE_SUBJECT_MAX = 160
+const MESSAGE_BODY_MAX = 5000
+
+// Les clés restent stables (elles nomment le bouton qui ouvre le modèle) ;
+// seul le texte se personnalise. `{{...}}` est remplacé à l'envoi.
+const DEFAULT_TEMPLATES: MessageTemplate[] = [
+  {
+    key: 'bienvenue',
+    label: 'Bienvenue à l’inscription',
+    audience: 'inscription',
+    subject: 'Votre inscription chez {{boutique}}',
+    body: [
+      'Bonjour,',
+      '',
+      'Merci de votre inscription : vous recevrez les nouveaux chevaux, poneys et ânes mis en vente, et les baisses de prix qui comptent.',
+      '',
+      'Tout le catalogue : {{lien}}',
+      '',
+      'Une question sur un animal ? Répondez à cet e-mail, nous lisons tout.',
+      '',
+      'À bientôt,',
+      '{{boutique}}',
+    ].join('\n'),
+  },
+  {
+    key: 'nouveautes',
+    label: 'Nouvelles fiches de la semaine',
+    audience: 'inscription',
+    subject: 'Les nouvelles fiches de la semaine',
+    body: [
+      'Bonjour,',
+      '',
+      'De nouvelles fiches viennent d’arriver : race, âge, discipline, département et prix y sont détaillés, photo comprise.',
+      '',
+      'Le catalogue complet : {{lien}}',
+      '',
+      'Bonne visite,',
+      '{{boutique}}',
+    ].join('\n'),
+  },
+  {
+    key: 'paiement-attente',
+    label: 'Relance de paiement',
+    audience: 'commande',
+    subject: 'Votre commande {{reference}} attend son règlement',
+    body: [
+      'Bonjour,',
+      '',
+      'Votre commande {{reference}} est bien enregistrée, mais son règlement n’est pas encore arrivé.',
+      '',
+      'Montant : {{total}}',
+      'Articles :',
+      '{{articles}}',
+      '',
+      'Répondez à cet e-mail pour recevoir le lien de paiement, ou réglez par virement si nous vous l’avons déjà transmis : nous gardons la commande de côté d’ici là.',
+      '',
+      'Merci,',
+      '{{boutique}}',
+    ].join('\n'),
+  },
+  {
+    key: 'paiement-recu',
+    label: 'Paiement reçu',
+    audience: 'commande',
+    subject: 'Paiement reçu — commande {{reference}}',
+    body: [
+      'Bonjour,',
+      '',
+      'Nous avons bien reçu le règlement de {{total}} pour la commande {{reference}}. Elle est confirmée et nous préparons le départ.',
+      '',
+      'Articles :',
+      '{{articles}}',
+      '',
+      'Vous recevrez un message avec le suivi dès l’expédition.',
+      '',
+      'Merci de votre confiance,',
+      '{{boutique}}',
+    ].join('\n'),
+  },
+  {
+    key: 'expedition',
+    label: 'Commande expédiée',
+    audience: 'commande',
+    subject: 'Votre commande {{reference}} est en route',
+    body: [
+      'Bonjour,',
+      '',
+      'Votre commande {{reference}} a quitté nos écuries. Le transporteur vous contacte pour convenir de la livraison.',
+      '',
+      'Articles :',
+      '{{articles}}',
+      '',
+      'Une question d’ici là ? Répondez à cet e-mail.',
+      '',
+      '{{boutique}}',
+    ].join('\n'),
+  },
+]
+
+type MessageContext = { email: string; reference?: string; total?: number; items?: OrderLine[] }
+
+/** Même format que l'admin (`2 450 €`), pour que l'aperçu et le reçu collent. */
+const euro = (value: number) =>
+  new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
+  }).format(value)
+
+/**
+ * Remplace `{{cle}}` par sa valeur. Un jeton inconnu reste tel quel : mieux
+ * vaut un `{{reference}}` visible dans un e-mail d'inscription qu'un texte
+ * silencieusement troué.
+ */
+function fillTemplate(text: string, context: MessageContext, env: Env) {
+  const values: Record<string, string> = {
+    email: context.email,
+    boutique: 'achat-cheval',
+    lien: env.APP_ORIGIN,
+    date: new Date().toLocaleDateString('fr-FR', { dateStyle: 'long', timeZone: 'Europe/Paris' }),
+  }
+  if (context.reference) values.reference = context.reference
+  if (typeof context.total === 'number') values.total = euro(context.total)
+  if (context.items) {
+    values.articles = context.items
+      .map((line) => `· ${line.quantity} × ${line.name}${line.option ? ` (${line.option})` : ''} — ${euro(line.price * line.quantity)}`)
+      .join('\n')
+  }
+  return text.replace(/\{\{\s*([a-z]+)\s*\}\}/gi, (match, name: string) => values[name.toLowerCase()] ?? match)
+}
+
+/** Le texte du modèle, mis en pages pour un client mail (texte échappé). */
+function messageHtml(text: string) {
+  const blocks = escapeHtml(text)
+    .split(/\n{2,}/)
+    .map((block) => `<p style="margin:0 0 16px">${block.replace(/\n/g, '<br>')}</p>`)
+    .join('')
+  return `<div style="font-family:system-ui,sans-serif;line-height:1.65;color:#1c1917">${blocks}</div>`
 }
 
 app.get('/api/health', (c) => c.json({ ok: true }))
@@ -1431,6 +1619,162 @@ app.get('/api/subscribers', async (c) => {
   } catch (error) {
     console.error('Lecture des inscriptions impossible :', error)
     return c.json({ error: 'Impossible de charger les inscriptions.' }, 500)
+  }
+})
+
+// Modèles de messages : l'admin les lit et les réécrit à sa main. Ils vivent
+// en base, donc un texte changé vaut immédiatement, sans redéploiement.
+app.get('/api/admin/templates', async (c) => {
+  const owner = await requireOwner(c)
+  if (owner instanceof Response) return owner
+  try {
+    await ensureSchema(c.env.DB)
+    const { results } = await c.env.DB.prepare(
+      'SELECT key, label, audience, subject, body, updated_at FROM message_templates ORDER BY audience DESC, label ASC',
+    ).all<TemplateRow>()
+    return c.json(
+      {
+        templates: results.map((row) => ({
+          key: row.key,
+          label: row.label,
+          audience: row.audience === 'commande' ? 'commande' : 'inscription',
+          subject: row.subject,
+          body: row.body,
+          updatedAt: row.updated_at,
+        })),
+      },
+      200,
+      { 'cache-control': 'private, no-store' },
+    )
+  } catch (error) {
+    console.error('Lecture des modèles impossible :', error)
+    return c.json({ error: 'Impossible de charger les modèles.' }, 500)
+  }
+})
+
+app.put('/api/admin/templates/:key', async (c) => {
+  const owner = await requireOwner(c)
+  if (owner instanceof Response) return owner
+  const body = await c.req.json<{ subject?: string; body?: string }>().catch(() => null)
+  const subject = (body?.subject ?? '').trim()
+  const text = (body?.body ?? '').trim()
+  if (!subject) return c.json({ error: 'Renseignez un objet.' }, 400)
+  if (subject.length > MESSAGE_SUBJECT_MAX) return c.json({ error: `L’objet dépasse ${MESSAGE_SUBJECT_MAX} caractères.` }, 400)
+  if (text.length < 10) return c.json({ error: 'Le message est trop court.' }, 400)
+  if (text.length > MESSAGE_BODY_MAX) return c.json({ error: `Le message dépasse ${MESSAGE_BODY_MAX} caractères.` }, 400)
+
+  try {
+    await ensureSchema(c.env.DB)
+    const updatedAt = new Date().toISOString()
+    const result = await c.env.DB.prepare('UPDATE message_templates SET subject = ?, body = ?, updated_at = ? WHERE key = ?')
+      .bind(subject, text, updatedAt, c.req.param('key'))
+      .run()
+    if (!result.meta.changes) return c.json({ error: 'Ce modèle n’existe pas.' }, 404)
+    return c.json({ ok: true, updatedAt }, 200, { 'cache-control': 'private, no-store' })
+  } catch (error) {
+    console.error('Enregistrement du modèle impossible :', error)
+    return c.json({ error: 'Impossible d’enregistrer ce modèle.' }, 500)
+  }
+})
+
+// Envoi d'un message à une adresse. Le contexte d'une commande (référence,
+// lignes, total) est relu en base : ce qui part ne dépend jamais des valeurs
+// envoyées par le navigateur.
+app.post('/api/admin/messages', async (c) => {
+  const owner = await requireOwner(c)
+  if (owner instanceof Response) return owner
+  const body = await c.req
+    .json<{ to?: string; template?: string; subject?: string; body?: string; reference?: string }>()
+    .catch(() => null)
+  const to = (body?.to ?? '').trim().toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to) || to.length > 160) return c.json({ error: 'Adresse e-mail invalide.' }, 400)
+  const subject = (body?.subject ?? '').trim()
+  const text = (body?.body ?? '').trim()
+  if (!subject) return c.json({ error: 'Renseignez un objet.' }, 400)
+  if (subject.length > MESSAGE_SUBJECT_MAX) return c.json({ error: `L’objet dépasse ${MESSAGE_SUBJECT_MAX} caractères.` }, 400)
+  if (text.length < 10) return c.json({ error: 'Écrivez le message avant de l’envoyer.' }, 400)
+  if (text.length > MESSAGE_BODY_MAX) return c.json({ error: `Le message dépasse ${MESSAGE_BODY_MAX} caractères.` }, 400)
+
+  const reference = (body?.reference ?? '').trim()
+
+  try {
+    await ensureSchema(c.env.DB)
+
+    let order: { reference: string; items: string; total: number } | null = null
+    if (reference) {
+      order = await c.env.DB.prepare('SELECT reference, items, total FROM orders WHERE reference = ?')
+        .bind(reference)
+        .first<{ reference: string; items: string; total: number }>()
+      if (!order) return c.json({ error: 'Commande introuvable.' }, 404)
+    }
+
+    let items: OrderLine[] | undefined
+    if (order) {
+      items = []
+      try {
+        const parsed: unknown = JSON.parse(order.items)
+        if (Array.isArray(parsed)) items = parsed as OrderLine[]
+      } catch {
+        items = []
+      }
+    }
+
+    const context: MessageContext = { email: to, reference: order?.reference, total: order?.total, items }
+    const filledSubject = fillTemplate(subject, context, c.env).slice(0, MESSAGE_SUBJECT_MAX)
+    const filledText = fillTemplate(text, context, c.env)
+
+    // Sans clé Resend, le message est tout de même journalisé : l'admin voit
+    // qu'il est parti de son écran sans jamais être arrivé.
+    let status: 'envoye' | 'echec' | 'sans-cle' = 'envoye'
+    let detail = ''
+    if (!c.env.RESEND_API_KEY) {
+      status = 'sans-cle'
+      detail = 'RESEND_API_KEY manquant.'
+    } else {
+      const sent = await sendEmail(c.env, {
+        to,
+        subject: filledSubject,
+        text: filledText,
+        html: messageHtml(filledText),
+      }).catch((error: unknown) => {
+        console.error('Envoi du message impossible :', error)
+        return false
+      })
+      if (!sent) {
+        status = 'echec'
+        detail = 'Resend a refusé l’envoi.'
+      }
+    }
+
+    await c.env.DB.prepare(
+      'INSERT INTO admin_messages (created_at, email, template_key, subject, body, reference, status, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(
+        new Date().toISOString(),
+        to,
+        (body?.template ?? '').slice(0, 60),
+        filledSubject,
+        filledText,
+        order?.reference ?? '',
+        status,
+        detail,
+      )
+      .run()
+      .catch((error: unknown) => console.error('Journal du message impossible :', error))
+    await c.env.DB.prepare('DELETE FROM admin_messages WHERE id NOT IN (SELECT id FROM admin_messages ORDER BY id DESC LIMIT 200)')
+      .run()
+      .catch(() => undefined)
+
+    if (status === 'sans-cle') {
+      return c.json({ status, error: 'Aucune clé Resend : le message est enregistré, mais rien n’est parti.' }, 503)
+    }
+    if (status === 'echec') {
+      return c.json({ status, error: 'Resend n’a pas accepté l’envoi. Vérifiez la clé et l’adresse d’expédition.' }, 502)
+    }
+    return c.json({ status, subject: filledSubject, body: filledText }, 200, { 'cache-control': 'private, no-store' })
+  } catch (error) {
+    console.error('Envoi du message impossible :', error)
+    return c.json({ error: 'Impossible d’envoyer ce message.' }, 500)
   }
 })
 

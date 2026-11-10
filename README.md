@@ -1,10 +1,23 @@
 # achat-cheval
 
+[![Vérifications](https://img.shields.io/badge/V%C3%A9rifications-GitHub%20Actions-2F81F7?logo=githubactions&logoColor=white)](https://github.com/magnuscapital6-coder/achat-cheval/actions/workflows/verifications.yml)
+
 Un catalogue de chevaux, poneys et ânes à la vente : des fiches lisibles —
 race, sexe, âge, taille, discipline, prix, département — avec une photo par
 cheval. Boutique filtrable par catégorie et prix, fiches détaillées, et un
 formulaire de visite qui enregistre la demande en base et prévient le
 propriétaire par e-mail.
+
+## Vérifications
+
+`.github/workflows/verifications.yml` lance `npm run typecheck` puis
+`npm run build` à chaque poussée, sur Node 24 ; une poussée rouge se voit dans
+l'onglet Actions plutôt qu'au moment du déploiement. Le badge en tête de ce
+fichier ouvre ce workflow : c'est un badge de lien, pas d'état, car GitHub ne
+sert pas de badge d'état pour un dépôt privé (l'URL du badge répond 404, même
+avec un jeton). Le jour où le dépôt devient public, remplacez-le par
+`https://github.com/magnuscapital6-coder/achat-cheval/actions/workflows/verifications.yml/badge.svg`
+pour obtenir l'état en direct.
 
 ## Run it
 

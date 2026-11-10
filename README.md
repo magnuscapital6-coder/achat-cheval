@@ -1,6 +1,6 @@
 # achat-cheval
 
-[![Vérifications](https://img.shields.io/badge/V%C3%A9rifications-GitHub%20Actions-2F81F7?logo=githubactions&logoColor=white)](https://github.com/magnuscapital6-coder/achat-cheval/actions/workflows/verifications.yml)
+[![Vérifications](https://github.com/magnuscapital6-coder/achat-cheval/actions/workflows/verifications.yml/badge.svg?branch=main)](https://github.com/magnuscapital6-coder/achat-cheval/actions/workflows/verifications.yml)
 
 Un catalogue de chevaux, poneys et ânes à la vente : des fiches lisibles —
 race, sexe, âge, taille, discipline, prix, département — avec une photo par
@@ -13,11 +13,10 @@ propriétaire par e-mail.
 `.github/workflows/verifications.yml` lance `npm run typecheck` puis
 `npm run build` à chaque poussée, sur Node 24 ; une poussée rouge se voit dans
 l'onglet Actions plutôt qu'au moment du déploiement. Le badge en tête de ce
-fichier ouvre ce workflow : c'est un badge de lien, pas d'état, car GitHub ne
-sert pas de badge d'état pour un dépôt privé (l'URL du badge répond 404, même
-avec un jeton). Le jour où le dépôt devient public, remplacez-le par
-`https://github.com/magnuscapital6-coder/achat-cheval/actions/workflows/verifications.yml/badge.svg`
-pour obtenir l'état en direct.
+fichier affiche l'état du workflow sur `main` — `passing` ou `failing` — le
+résultat du dernier commit poussé sur cette branche, et ouvre le workflow au
+clic. GitHub ne sert ce badge que pour un dépôt public : le garder privé
+renverrait une image cassée.
 
 ## Run it
 

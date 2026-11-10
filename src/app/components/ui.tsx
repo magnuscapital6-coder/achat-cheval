@@ -4,6 +4,7 @@ import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { Link } from 'react-router'
 
 import { cx } from '../lib/cx'
+import { useT } from '../lib/i18n'
 
 type Variant = 'primary' | 'secondary' | 'ghost'
 type Size = 'md' | 'lg' | 'sm'
@@ -82,13 +83,14 @@ export function SectionTitle({ eyebrow, title, action, className }: { eyebrow?: 
 }
 
 export function Stepper({ value, onChange, min = 1, className }: { value: number; onChange: (v: number) => void; min?: number; className?: string }) {
+  const t = useT()
   return (
     <div className={cx('grid h-12 grid-cols-[48px_1fr_48px] items-center rounded-control border border-line-strong text-[15px]', className)}>
-      <button type="button" aria-label="Diminuer" onClick={() => onChange(Math.max(min, value - 1))} className="h-full rounded-l-control text-muted transition-colors hover:text-fg">
+      <button type="button" aria-label={t('cart.decrease')} onClick={() => onChange(Math.max(min, value - 1))} className="h-full rounded-l-control text-muted transition-colors hover:text-fg">
         −
       </button>
       <span className="text-center tabular-nums">{value}</span>
-      <button type="button" aria-label="Augmenter" onClick={() => onChange(value + 1)} className="h-full rounded-r-control text-muted transition-colors hover:text-fg">
+      <button type="button" aria-label={t('cart.increase')} onClick={() => onChange(value + 1)} className="h-full rounded-r-control text-muted transition-colors hover:text-fg">
         +
       </button>
     </div>

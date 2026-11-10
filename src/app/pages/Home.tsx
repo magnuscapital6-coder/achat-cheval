@@ -7,10 +7,12 @@ import { useCatalogue } from '../lib/catalogue'
 import { ProductCard } from '../components/ProductCard'
 import { ButtonLink, Container, Reveal, SectionTitle } from '../components/ui'
 import { money } from '../lib/cart'
+import { categoryBlurbKey, categoryKey, useI18n } from '../lib/i18n'
 
 const ease = [0.22, 1, 0.36, 1] as const
 
 export function Home() {
+  const { t } = useI18n()
   const { products } = useCatalogue()
   const featured = products.filter((p) => p.featured)
   const newArrivals = products.slice(0, 4)
@@ -24,20 +26,15 @@ export function Home() {
           <div className="grid items-end gap-10 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
             <div className="pb-4">
               <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease }} className="text-[14px] text-muted">
-                Chevaux, poneys et ânes, France entière
+                {t('home.eyebrow')}
               </motion.p>
               <h1 className="font-display mt-4 text-[56px] leading-[0.98] sm:text-[80px] lg:text-[96px]">
-                {['Des chevaux', 'qui vous ressemblent'].map((line, i) => (
+                {[t('home.title1'), t('home.titleWho')].map((line, i) => (
                   <span key={line} className="block overflow-hidden pb-[0.18em] -mb-[0.18em]">
-                    <motion.span
-                      className="block"
-                      initial={{ y: '100%' }}
-                      animate={{ y: 0 }}
-                      transition={{ duration: 0.9, delay: 0.1 + i * 0.12, ease }}
-                    >
+                    <motion.span className="block" initial={{ y: '100%' }} animate={{ y: 0 }} transition={{ duration: 0.9, delay: 0.1 + i * 0.12, ease }}>
                       {i === 1 ? (
                         <>
-                          qui vous <em className="italic text-accent">ressemblent</em>
+                          {line} <em className="italic text-accent">{t('home.titleAccent')}</em>
                         </>
                       ) : (
                         line
@@ -47,15 +44,15 @@ export function Home() {
                 ))}
               </h1>
               <motion.p initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.45, ease }} className="mt-6 max-w-md text-[17px] leading-relaxed text-muted">
-                Un œil sur le marché : des chevaux et des poneys repérés chez nos confrères, remis à plat avec leurs prix, leur âge et leur département. Vous décidez, on vous accompagne.
+                {t('home.intro')}
               </motion.p>
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.55, ease }} className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <ButtonLink to="/shop?category=chevaux" size="lg" className="w-full sm:w-auto">
-                  Voir les chevaux
+                  {t('home.ctaHorses')}
                   <ArrowRight />
                 </ButtonLink>
                 <ButtonLink to="/about" size="lg" variant="secondary" className="w-full sm:w-auto">
-                  Notre écurie
+                  {t('home.ctaStables')}
                 </ButtonLink>
               </motion.div>
             </div>
@@ -65,7 +62,7 @@ export function Home() {
               transition={{ duration: 1.1, delay: 0.2, ease }}
               className="image-frame relative aspect-[4/3] rounded-[32px] lg:aspect-[5/4]"
             >
-              <img src="/images/hero.jpg" alt="Un cheval blanc au galop dans la lumière du matin" className="size-full object-cover" fetchPriority="high" />
+              <img src="/images/hero.jpg" alt={t('home.heroAlt')} className="size-full object-cover" fetchPriority="high" />
               {lead && (
                 <Link
                   to={`/product/${lead.slug}`}
@@ -91,11 +88,11 @@ export function Home() {
         <Container>
           <Reveal>
             <SectionTitle
-              eyebrow="Tout juste arrivés"
-              title="Nouveautés"
+              eyebrow={t('home.newEyebrow')}
+              title={t('home.newTitle')}
               action={
                 <Link to="/shop" className="hidden items-center gap-1.5 text-[14px] text-muted transition-colors hover:text-fg sm:inline-flex">
-                  Tout voir
+                  {t('home.seeAll')}
                   <ArrowRight className="size-4" />
                 </Link>
               }
@@ -116,11 +113,11 @@ export function Home() {
             {categories.slice(0, 3).map((c, i) => (
               <Reveal key={c.key} delay={i * 0.08}>
                 <Link to={`/shop?category=${c.key}`} className="group image-frame relative block aspect-[4/5] rounded-image">
-                  <img src={c.image} alt={c.label} className="size-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.04]" />
+                  <img src={c.image} alt={t(categoryKey(c.key))} className="size-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.04]" />
                   <div className="absolute inset-x-4 bottom-4 flex items-end justify-between rounded-[18px] bg-surface/90 p-4 backdrop-blur">
                     <div>
-                      <p className="font-display text-[28px] leading-none">{c.label}</p>
-                      <p className="mt-1.5 text-[13px] text-muted">{c.blurb}</p>
+                      <p className="font-display text-[28px] leading-none">{t(categoryKey(c.key))}</p>
+                      <p className="mt-1.5 text-[13px] text-muted">{t(categoryBlurbKey(c.key))}</p>
                     </div>
                     <span className="grid size-10 place-items-center rounded-[12px] bg-fg text-bg transition-transform group-hover:translate-x-0.5">
                       <ArrowRight className="size-4" />
@@ -138,16 +135,14 @@ export function Home() {
         <Container>
           <div className="grid items-center gap-10 rounded-[32px] bg-surface-2/60 p-5 sm:p-8 lg:grid-cols-2 lg:gap-16 lg:p-12">
             <Reveal className="image-frame aspect-[4/3] rounded-image">
-              <img src="/images/lookbook.jpg" alt="Un cavalier panse son cheval dans une écurie" className="size-full object-cover" loading="lazy" />
+              <img src="/images/lookbook.jpg" alt={t('home.editorialAlt')} className="size-full object-cover" loading="lazy" />
             </Reveal>
             <Reveal delay={0.1} className="lg:pr-8">
-              <p className="text-[14px] text-muted">L’écurie</p>
-              <h2 className="font-display mt-3 text-balance text-[40px] leading-[1.02] sm:text-[52px]">Tout ce qu’il faut savoir, sur la fiche</h2>
-              <p className="mt-5 text-pretty text-[16px] leading-relaxed text-muted">
-                Race, âge, taille, discipline, prix, département et une photo : l’essentiel tient sur une page. Ce qui manque, on le demande au propriétaire avant votre visite.
-              </p>
+              <p className="text-[14px] text-muted">{t('home.editorialEyebrow')}</p>
+              <h2 className="font-display mt-3 text-balance text-[40px] leading-[1.02] sm:text-[52px]">{t('home.editorialTitle')}</h2>
+              <p className="mt-5 text-pretty text-[16px] leading-relaxed text-muted">{t('home.editorialBody')}</p>
               <ButtonLink to="/about" variant="secondary" className="mt-8">
-                Notre façon de faire
+                {t('home.editorialCta')}
               </ButtonLink>
             </Reveal>
           </div>
@@ -158,7 +153,7 @@ export function Home() {
       <section className="pt-24 sm:pt-32">
         <Container>
           <Reveal>
-            <SectionTitle eyebrow="Les plus demandés" title="Coups de cœur" />
+            <SectionTitle eyebrow={t('home.favEyebrow')} title={t('home.favTitle')} />
           </Reveal>
           <div className="mt-10 grid grid-cols-2 gap-x-4 gap-y-10 lg:grid-cols-3 lg:gap-x-6">
             {featured.slice(0, 6).map((p, i) => (
@@ -167,7 +162,7 @@ export function Home() {
           </div>
           <div className="mt-12 flex justify-center">
             <ButtonLink to="/shop" variant="secondary" size="lg">
-              Voir tout le catalogue
+              {t('home.allCatalogue')}
             </ButtonLink>
           </div>
         </Container>
@@ -178,9 +173,9 @@ export function Home() {
         <Container>
           <ul className="grid gap-4 border-y border-line py-10 sm:grid-cols-3">
             {[
-              { icon: Camera, title: 'Une photo par fiche', body: 'Pour voir le cheval avant de vous déplacer.' },
-              { icon: Euro, title: 'Prix affichés, sans détour', body: 'En euros, transport compté à part.' },
-              { icon: CalendarCheck, title: 'Une question ? On répond', body: 'Sous 24 h ouvrées, par téléphone.' },
+              { icon: Camera, title: t('home.promise1Title'), body: t('home.promise1Body') },
+              { icon: Euro, title: t('home.promise2Title'), body: t('home.promise2Body') },
+              { icon: CalendarCheck, title: t('home.promise3Title'), body: t('home.promise3Body') },
             ].map(({ icon: Icon, title, body }, i) => (
               <Reveal key={title} delay={i * 0.08}>
                 <li className="flex items-start gap-4">

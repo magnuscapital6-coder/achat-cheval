@@ -1,19 +1,22 @@
 # Copiez ce fichier en `.dev.vars` (ignoré par git) pour le développement local.
-# En production, `sites_deploy` injecte ces trois variables tout seul ; il n'y
-# a donc rien à mettre dans Sites → Secrets pour la connexion.
+# En production, `sites_deploy` injecte `APP_ORIGIN` tout seul ; il n'y a donc
+# rien à mettre dans Sites → Secrets pour l'origine.
 
-# Sign in with Freebuff. Ce sont des valeurs publiques, pas des secrets.
-# Les deux premières viennent de `sites_enable_auth` (bloc « development ») et
-# ne fonctionnent que sur http://localhost:5173.
-FREEBUFF_CLIENT_ID=
-FREEBUFF_ISSUER=https://freebuff.com/oidc
 APP_ORIGIN=http://localhost:5173
 
-# Clé API Resend (https://resend.com/api-keys). Sans elle, les demandes de
-# visite sont bien enregistrées en base mais aucun e-mail n'est envoyé.
+# Connexion admin : l'e-mail et le condensat PBKDF2 du mot de passe, en une
+# seule ligne JSON. Générez-le avec `node scripts/hash-password.mjs 'mot de
+# passe'`, puis copiez la sortie telle quelle. Le mot de passe en clair n'est
+# jamais nécessaire ici.
+ADMIN_CREDENTIALS=
+
+# Clé API Resend (https://resend.com/api-keys). Sans elle, demandes de visite
+# et commandes sont bien enregistrées en base, mais aucun e-mail ne part — ni
+# l'alerte au propriétaire, ni l'accusé de réception de l'acheteur.
 RESEND_API_KEY=
 
-# Adresse qui reçoit les alertes « nouvelle demande de visite ».
+# Adresse qui reçoit les alertes « nouvelle demande de visite » et « nouvelle
+# commande ».
 ENQUIRY_NOTIFY_EMAIL=
 
 # Expéditeur. `onboarding@resend.dev` fonctionne sans domaine vérifié mais

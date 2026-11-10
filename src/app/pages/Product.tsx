@@ -10,9 +10,11 @@ import { Button, Container, Stepper } from '../components/ui'
 import { VisitForm } from '../components/VisitForm'
 import { money, useCart } from '../lib/cart'
 import { cx } from '../lib/cx'
+import { categoryKey, useI18n } from '../lib/i18n'
 
 export function Product() {
   const { slug } = useParams()
+  const { t } = useI18n()
   const { products, loading } = useCatalogue()
   const product = slug ? products.find((p) => p.slug === slug) : undefined
   const cart = useCart()
@@ -30,11 +32,31 @@ export function Product() {
     window.scrollTo({ top: 0 })
   }, [product])
 
+  // Une visite par fiche et par session : un rechargement ou un retour depuis
+  // la boutique ne gonfle pas le compteur. L'envoi est facultatif, un échec
+  // ne change rien pour le visiteur.
+  const countedSlug = product?.slug
+  useEffect(() => {
+    if (!countedSlug) return
+    const seen = `fiche-vue:${countedSlug}`
+    try {
+      if (sessionStorage.getItem(seen)) return
+      sessionStorage.setItem(seen, '1')
+    } catch {
+      // Navigation privée sans stockage : on compte quand même.
+    }
+    void fetch('/api/views', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: window.location.pathname }),
+    }).catch(() => undefined)
+  }, [countedSlug])
+
   if (!product) {
     if (loading) {
       return (
         <Container className="pt-24">
-          <p className="text-[14px] text-muted">Chargement de la fiche…</p>
+          <p className="text-[14px] text-muted">{t('product.loading')}</p>
         </Container>
       )
     }
@@ -46,27 +68,21 @@ export function Product() {
   // Une photo, trois cadrages : une vue entière et deux plans serrés qui
   // tiennent lieu de galerie tant qu'il n'y a pas de vraies photos de détail.
   const views = [
-    { label: 'Entier', style: {} },
-    { label: 'Détail', style: { transform: 'scale(1.8)', transformOrigin: '50% 35%' } },
-    { label: 'Matière', style: { transform: 'scale(2.4)', transformOrigin: '50% 70%' } },
+    { label: t('product.viewWhole'), style: {} },
+    { label: t('product.viewDetail'), style: { transform: 'scale(1.8)', transformOrigin: '50% 35%' } },
+    { label: t('product.viewTexture'), style: { transform: 'scale(2.4)', transformOrigin: '50% 70%' } },
   ]
   const related = products.filter((p) => p.slug !== product.slug && (p.category === product.category || p.featured)).slice(0, 4)
   const sections = animal
     ? [
-        { title: 'Détails', body: product.details },
-        ...(product.materials ? [{ title: 'Santé et suivi', body: [product.materials] }] : []),
-        {
-          title: 'Visite et transport',
-          body: [
-            "Visite sur rendez-vous à l’écurie. Prévoyez une heure, bottes conseillées.",
-            'Transport possible partout en France, sur devis, par un transporteur de chevaux.',
-          ],
-        },
+        { title: t('product.details'), body: product.details },
+        ...(product.materials ? [{ title: t('product.health'), body: [product.materials] }] : []),
+        { title: t('product.visitTransport'), body: [t('product.visitLine1'), t('product.visitLine2')] },
       ]
     : [
-        { title: 'Détails', body: product.details },
-        { title: 'Matières et entretien', body: [product.materials] },
-        { title: 'Livraison et retours', body: ['Expédié en 2 à 4 jours. Livraison offerte dès 150 €.', 'Retours acceptés sous 30 jours, dans l’état d’origine.'] },
+        { title: t('product.details'), body: product.details },
+        { title: t('product.materials'), body: [product.materials] },
+        { title: t('product.shipping'), body: [t('product.shippingLine1'), t('product.shippingLine2')] },
       ]
 
   function add() {
@@ -79,7 +95,7 @@ export function Product() {
     <Container className="pt-6 sm:pt-10">
       <Link to="/shop" className="inline-flex h-9 items-center gap-1.5 text-[14px] text-muted transition-colors hover:text-fg">
         <ArrowLeft className="size-4" />
-        Boutique
+        {t('product.breadcrumb')}
       </Link>
 
       <div className="mt-6 grid gap-10 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
@@ -112,23 +128,23 @@ export function Product() {
                   style={views[view].style}
                 />
               </AnimatePresence>
-              {product.badge && <span className="absolute left-4 top-4 rounded-[10px] bg-surface/90 px-2.5 py-1 text-[12px] font-medium backdrop-blur">{product.badge}</span>}
+              {product.badge && <span className="absolute left-4 top-4 rounded-[10px] bg-surface/90 px-2.5 py-1 text-[12px] font-medium backdrop-blur">{t(`badge.${product.badge}`)}</span>}
             </div>
           </div>
         ) : (
           <div className="image-frame relative aspect-[3/4] rounded-image">
             <div className="flex size-full flex-col items-center justify-center gap-4 bg-surface-2 px-8 text-center">
               <span className="font-display text-[88px] leading-none text-faint">{product.mark ?? '—'}</span>
-              <span className="text-[12px] uppercase tracking-[0.16em] text-faint">Photo à venir</span>
+              <span className="text-[12px] uppercase tracking-[0.16em] text-faint">{t('product.photoSoon')}</span>
             </div>
           </div>
         )}
 
         <div className="lg:pt-4">
-          <p className="text-[14px] capitalize text-muted">{product.category}</p>
-          <h1 className="font-display mt-2 text-[44px] leading-[1] sm:text-[56px]">{product.name}</h1>
+          <p className="text-[14px] text-muted">{t(categoryKey(product.category))}</p>
+          <h1 className="font-display mt-2 text-[38px] leading-[1.02] sm:text-[56px]">{product.name}</h1>
           <p className="mt-4 text-[22px] tabular-nums">{money(product.price)}</p>
-          {animal && <p className="mt-2 text-[13px] text-faint">Prix de vente. Visite sur rendez-vous, transport sur devis.</p>}
+          {animal && <p className="mt-2 text-[13px] text-faint">{t('product.priceNote')}</p>}
           <p className="mt-6 text-pretty text-[16px] leading-relaxed text-muted">{product.description}</p>
 
           {product.options && (
@@ -158,9 +174,9 @@ export function Product() {
           {animal ? (
             <div className="mt-8">
               <Button size="lg" className="w-full sm:w-auto" onClick={() => setVisitOpen(true)}>
-                Organiser une visite
+                {t('product.visit')}
               </Button>
-              <p className="mt-3 text-[13px] text-faint">Réponse sous 24 h ouvrées. Aucun engagement avant la visite.</p>
+              <p className="mt-3 text-[13px] text-faint">{t('product.visitNote')}</p>
             </div>
           ) : (
             <>
@@ -170,14 +186,14 @@ export function Product() {
                   {added ? (
                     <>
                       <Check />
-                      Ajouté au panier
+                      {t('product.added')}
                     </>
                   ) : (
-                    `Ajouter au panier · ${money(product.price * quantity)}`
+                    t('product.addWithPrice', { price: money(product.price * quantity) })
                   )}
                 </Button>
               </div>
-              <p className="mt-3 text-[13px] text-faint">Livraison offerte dès 150 €. Retours sous 30 jours.</p>
+              <p className="mt-3 text-[13px] text-faint">{t('product.freeShipping')}</p>
             </>
           )}
 
@@ -211,7 +227,7 @@ export function Product() {
       {animal && <VisitForm open={visitOpen} onClose={() => setVisitOpen(false)} animal={product.name} />}
 
       <section className="pt-24 sm:pt-32">
-        <h2 className="font-display text-[36px] sm:text-[44px]">À découvrir aussi</h2>
+        <h2 className="font-display text-[36px] sm:text-[44px]">{t('product.alsoLike')}</h2>
         <div className="mt-10 grid grid-cols-2 gap-x-4 gap-y-10 lg:grid-cols-4 lg:gap-x-6">
           {related.map((p, i) => (
             <ProductCard key={p.slug} product={p} index={i} />

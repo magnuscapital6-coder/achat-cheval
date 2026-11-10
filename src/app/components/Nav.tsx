@@ -3,16 +3,10 @@ import { Menu, ShoppingBag, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router'
 
+import { MARKETS, MARKETS_BY_LANG, langName, type MarketId } from '../../data/locales'
 import { useCart } from '../lib/cart'
 import { cx } from '../lib/cx'
-
-const links = [
-  { to: '/shop', label: 'Boutique' },
-  { to: '/shop?category=chevaux', label: 'Chevaux' },
-  { to: '/shop?category=poneys', label: 'Poneys' },
-  { to: '/shop?category=autres', label: 'Ânes' },
-  { to: '/about', label: 'L’écurie' },
-]
+import { useI18n } from '../lib/i18n'
 
 export function Logo({ className }: { className?: string }) {
   return (
@@ -25,11 +19,44 @@ export function Logo({ className }: { className?: string }) {
   )
 }
 
+/** Les marchés du sélecteur, groupés par langue : dix entrées à plat sont illisibles. */
+function MarketOptions() {
+  return (
+    <>
+      {MARKETS_BY_LANG.map((group) => (
+        <optgroup key={group.lang} label={langName[group.lang]}>
+          {group.markets.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </>
+  )
+}
+
+/** Change de marché sans perdre la page en cours (rechargement complet). */
+function marketSwitch(marketId: string, pathname: string, search: string) {
+  const target = MARKETS.find((market) => market.id === (marketId as MarketId))
+  if (!target) return
+  window.location.assign(`${target.prefix}${pathname === '/' ? '/' : pathname}${search}`)
+}
+
 export function Nav() {
   const cart = useCart()
+  const { t, market } = useI18n()
   const [open, setOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const location = useLocation()
+
+  const links = [
+    { to: '/shop', label: t('nav.shop') },
+    { to: '/shop?category=chevaux', label: t('nav.horses') },
+    { to: '/shop?category=poneys', label: t('nav.ponies') },
+    { to: '/shop?category=autres', label: t('nav.donkeys') },
+    { to: '/about', label: t('nav.stables') },
+  ]
 
   useEffect(() => setOpen(false), [location])
   useEffect(() => {
@@ -41,7 +68,9 @@ export function Nav() {
 
   return (
     <>
-      <div className="flex h-9 items-center justify-center bg-fg px-4 text-center text-[12.5px] text-bg">Chevaux, poneys et ânes à la vente — visite sur rendez-vous</div>
+      {/* Le bandeau grandit au lieu d'être rogné : les traductions allemande et
+          néerlandaise tiennent sur deux lignes sur un téléphone étroit. */}
+      <div className="flex min-h-9 items-center justify-center bg-fg px-4 py-1.5 text-center text-[12px] leading-snug text-bg sm:py-0 sm:text-[12.5px]">{t('nav.banner')}</div>
       <header className={cx('sticky top-0 z-40 transition-[background-color,box-shadow,border-color] duration-300', scrolled ? 'border-b border-line bg-bg/85 backdrop-blur-xl' : 'bg-bg')}>
         <div className="mx-auto grid h-16 max-w-[1280px] grid-cols-[1fr_auto_1fr] items-center px-5 sm:px-8">
           <nav className="hidden items-center gap-1 lg:flex">
@@ -60,24 +89,37 @@ export function Nav() {
               </NavLink>
             ))}
           </nav>
-          <button type="button" aria-label="Menu" onClick={() => setOpen(true)} className="grid size-10 place-items-center rounded-control lg:hidden">
+          <button type="button" aria-label={t('nav.menu')} onClick={() => setOpen(true)} className="grid size-10 place-items-center rounded-control lg:hidden">
             <Menu className="size-5" />
           </button>
 
           <Logo />
 
           <div className="flex items-center justify-end gap-1">
+            <label className="relative hidden sm:block">
+              <span className="sr-only">{t('lang.label')}</span>
+              <select
+                value={market.id}
+                onChange={(e) => marketSwitch(e.target.value, location.pathname, location.search)}
+                className="h-9 max-w-[150px] appearance-none truncate rounded-[11px] bg-transparent pl-3 pr-7 text-[13.5px] text-muted transition-colors hover:bg-surface-2 hover:text-fg focus:text-fg focus:outline-none"
+              >
+                <MarketOptions />
+              </select>
+              <svg viewBox="0 0 24 24" className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-faint" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </label>
             <Link to="/about" className="hidden h-9 items-center rounded-[11px] px-3 text-[14px] text-muted transition-colors hover:bg-surface-2 hover:text-fg sm:inline-flex lg:hidden">
-              L’écurie
+              {t('nav.stables')}
             </Link>
             <button
               type="button"
-              aria-label={`Panier, ${cart.count} article${cart.count > 1 ? 's' : ''}`}
+              aria-label={t('nav.cartAria', { count: cart.count })}
               onClick={() => cart.setOpen(true)}
               className="relative inline-flex h-10 items-center gap-2 rounded-control px-3 text-[14px] transition-colors hover:bg-surface-2"
             >
               <ShoppingBag className="size-5" />
-              <span className="hidden sm:inline">Panier</span>
+              <span className="hidden sm:inline">{t('nav.cart')}</span>
               <AnimatePresence>
                 {cart.count > 0 && (
                   <motion.span
@@ -109,7 +151,7 @@ export function Nav() {
             >
               <div className="flex items-center justify-between">
                 <Logo />
-                <button type="button" aria-label="Fermer" onClick={() => setOpen(false)} className="grid size-10 place-items-center rounded-control hover:bg-surface-2">
+                <button type="button" aria-label={t('nav.close')} onClick={() => setOpen(false)} className="grid size-10 place-items-center rounded-control hover:bg-surface-2">
                   <X className="size-5" />
                 </button>
               </div>
@@ -122,6 +164,18 @@ export function Nav() {
                   </li>
                 ))}
               </ul>
+              <div className="mt-auto border-t border-line pt-4">
+                <label className="block">
+                  <span className="mb-1.5 block text-[12.5px] text-faint">{t('lang.label')}</span>
+                  <select
+                    value={market.id}
+                    onChange={(e) => marketSwitch(e.target.value, location.pathname, location.search)}
+                    className="h-11 w-full rounded-control border border-line-strong bg-surface px-3 text-[15px]"
+                  >
+                    <MarketOptions />
+                  </select>
+                </label>
+              </div>
             </motion.nav>
           </motion.div>
         )}

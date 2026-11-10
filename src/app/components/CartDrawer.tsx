@@ -5,9 +5,11 @@ import { Link, useNavigate } from 'react-router'
 
 import { FREE_SHIPPING_AT } from '../../data/products'
 import { money, useCart } from '../lib/cart'
+import { useI18n } from '../lib/i18n'
 import { Button } from './ui'
 
 export function CartDrawer() {
+  const { t } = useI18n()
   const cart = useCart()
   const navigate = useNavigate()
 
@@ -38,7 +40,7 @@ export function CartDrawer() {
         >
           <motion.aside
             role="dialog"
-            aria-label="Votre panier"
+            aria-label={t('cart.label')}
             initial={{ x: 40, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 40, opacity: 0 }}
@@ -47,9 +49,9 @@ export function CartDrawer() {
           >
             <header className="flex h-16 items-center justify-between border-b border-line px-6">
               <h2 className="font-display text-[26px]">
-                Votre panier {cart.count > 0 && <span className="ml-1.5 font-sans text-[14px] text-muted">{cart.count}</span>}
+                {t('cart.title')} {cart.count > 0 && <span className="ml-1.5 font-sans text-[14px] text-muted">{cart.count}</span>}
               </h2>
-              <button type="button" aria-label="Fermer" onClick={() => cart.setOpen(false)} className="grid size-10 place-items-center rounded-control transition-colors hover:bg-surface-2">
+              <button type="button" aria-label={t('nav.close')} onClick={() => cart.setOpen(false)} className="grid size-10 place-items-center rounded-control transition-colors hover:bg-surface-2">
                 <X className="size-5" />
               </button>
             </header>
@@ -57,8 +59,8 @@ export function CartDrawer() {
             {cart.items.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
                 <ShoppingBag className="size-6 text-faint" />
-                <p className="mt-4 font-display text-[28px]">Rien ici pour l’instant</p>
-                <p className="mt-1 text-[14px] text-muted">Un cheval, ça se choisit doucement.</p>
+                <p className="mt-4 font-display text-[28px]">{t('cart.empty')}</p>
+                <p className="mt-1 text-[14px] text-muted">{t('cart.emptyNote')}</p>
                 <Button
                   variant="secondary"
                   className="mt-6"
@@ -67,13 +69,13 @@ export function CartDrawer() {
                     navigate('/shop')
                   }}
                 >
-                  Voir la boutique
+                  {t('cart.emptyCta')}
                 </Button>
               </div>
             ) : (
               <>
                 <div className="px-6 pt-5">
-                  <p className="text-[13px] text-muted">{remaining > 0 ? `Encore ${money(remaining)} pour la livraison offerte` : 'Livraison offerte'}</p>
+                  <p className="text-[13px] text-muted">{remaining > 0 ? t('cart.remaining', { amount: money(remaining) }) : t('cart.free')}</p>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-[3px] bg-surface-2">
                     <motion.div className="h-full rounded-[3px] bg-fg" initial={false} animate={{ width: `${progress * 100}%` }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }} />
                   </div>
@@ -104,16 +106,16 @@ export function CartDrawer() {
                             </div>
                             <div className="mt-auto flex items-center justify-between">
                               <div className="grid h-9 grid-cols-[36px_32px_36px] items-center rounded-[11px] border border-line-strong text-[14px]">
-                                <button type="button" aria-label="Diminuer" onClick={() => cart.setQuantity(item.slug, item.option, item.quantity - 1)} className="h-full text-muted hover:text-fg">
+                                <button type="button" aria-label={t('cart.decrease')} onClick={() => cart.setQuantity(item.slug, item.option, item.quantity - 1)} className="h-full text-muted hover:text-fg">
                                   −
                                 </button>
                                 <span className="text-center tabular-nums">{item.quantity}</span>
-                                <button type="button" aria-label="Augmenter" onClick={() => cart.setQuantity(item.slug, item.option, item.quantity + 1)} className="h-full text-muted hover:text-fg">
+                                <button type="button" aria-label={t('cart.increase')} onClick={() => cart.setQuantity(item.slug, item.option, item.quantity + 1)} className="h-full text-muted hover:text-fg">
                                   +
                                 </button>
                               </div>
                               <button type="button" onClick={() => cart.remove(item.slug, item.option)} className="text-[13px] text-muted underline-offset-4 hover:text-fg hover:underline">
-                                Retirer
+                                {t('cart.remove')}
                               </button>
                             </div>
                           </div>
@@ -125,10 +127,10 @@ export function CartDrawer() {
 
                 <footer className="border-t border-line px-6 py-5">
                   <div className="flex items-center justify-between text-[15px]">
-                    <span className="text-muted">Sous-total</span>
+                    <span className="text-muted">{t('cart.subtotal')}</span>
                     <span className="tabular-nums">{money(cart.subtotal)}</span>
                   </div>
-                  <p className="mt-1 text-[12.5px] text-faint">Livraison et taxes calculées à la commande.</p>
+                  <p className="mt-1 text-[12.5px] text-faint">{t('cart.taxes')}</p>
                   <Button
                     size="lg"
                     className="mt-4 w-full"
@@ -137,7 +139,7 @@ export function CartDrawer() {
                       navigate('/checkout')
                     }}
                   >
-                    Passer commande
+                    {t('cart.checkout')}
                   </Button>
                 </footer>
               </>

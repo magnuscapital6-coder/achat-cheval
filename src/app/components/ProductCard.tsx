@@ -4,9 +4,11 @@ import { Link } from 'react-router'
 
 import { money, useCart } from '../lib/cart'
 import { cx } from '../lib/cx'
+import { useI18n } from '../lib/i18n'
 import { isAnimal, type Product } from '../../data/products'
 
 export function ProductCard({ product, index = 0, priority }: { product: Product; index?: number; priority?: boolean }) {
+  const { t } = useI18n()
   const cart = useCart()
   const [added, setAdded] = useState(false)
 
@@ -37,7 +39,7 @@ export function ProductCard({ product, index = 0, priority }: { product: Product
           ) : (
             <div className="flex size-full flex-col items-center justify-center gap-3 bg-surface-2 px-4 text-center">
               <span className="font-display text-[52px] leading-none text-faint">{product.mark ?? '—'}</span>
-              <span className="text-[11px] uppercase tracking-[0.14em] text-faint">Photo à venir</span>
+              <span className="text-[11px] uppercase tracking-[0.14em] text-faint">{t('card.photoSoon')}</span>
             </div>
           )}
           {product.badge && (
@@ -47,12 +49,12 @@ export function ProductCard({ product, index = 0, priority }: { product: Product
                 product.badge === 'Dernière place' ? 'bg-accent-soft/90 text-accent' : 'bg-surface/90 text-fg',
               )}
             >
-              {product.badge}
+              {t(`badge.${product.badge}`)}
             </span>
           )}
           {isAnimal(product) ? (
             <span className="absolute inset-x-3 bottom-3 flex h-11 translate-y-2 items-center justify-center rounded-[12px] bg-surface/90 text-[13px] font-medium opacity-0 backdrop-blur transition-[opacity,transform] duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-              Visite sur rendez-vous
+              {t('card.visit')}
             </span>
           ) : (
             <button
@@ -63,13 +65,15 @@ export function ProductCard({ product, index = 0, priority }: { product: Product
                 added && 'bg-accent hover:bg-accent',
               )}
             >
-              {added ? 'Ajouté au panier' : 'Ajouter au panier'}
+              {added ? t('card.added') : t('card.add')}
             </button>
           )}
         </div>
-        <div className="mt-3.5 flex items-start justify-between gap-3">
+        {/* Le prix passe sous le nom sur téléphone : à deux colonnes, le nom et
+            le prix côte à côte se coupaient au bout de trois mots. */}
+        <div className="mt-3.5 flex flex-col gap-0.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
           <div className="min-w-0">
-            <h3 className="truncate text-[15px] font-medium">{product.name}</h3>
+            <h3 className="line-clamp-2 text-[15px] font-medium">{product.name}</h3>
             <p className="mt-0.5 truncate text-[13px] text-muted">{product.short}</p>
           </div>
           <p className="shrink-0 text-[15px] tabular-nums">{money(product.price)}</p>

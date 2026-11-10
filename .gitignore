@@ -6,3 +6,6 @@ dist
 !.dev.vars.example
 .DS_Store
 *.log
+
+# Clés fournies par l’utilisateur : jamais dans le dépôt.
+.secrets/

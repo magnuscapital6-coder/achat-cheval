@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 
+import type { Lang } from '../../data/locales'
 import { bySlug, type Product } from '../../data/products'
 
 export interface CartLine {
@@ -82,12 +83,32 @@ export function useCart(): CartState {
   return ctx
 }
 
-const euro = new Intl.NumberFormat('fr-FR', {
-  style: 'currency',
-  currency: 'EUR',
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 2,
-})
-const euroCents = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' })
+// Les prix restent en euros (le catalogue est vendu en euros) ; seul le
+// formatage suit la langue : « 12 500 € » en français, « 12.500 € » en allemand.
+let moneyLocale = 'fr-FR'
+const formatters = new Map<string, Intl.NumberFormat>()
 
-export const money = (value: number) => (Number.isInteger(value) ? euro.format(value) : euroCents.format(value))
+function formatter(digits: number) {
+  const key = `${moneyLocale}:${digits}`
+  let instance = formatters.get(key)
+  if (!instance) {
+    instance = new Intl.NumberFormat(moneyLocale, { style: 'currency', currency: 'EUR', minimumFractionDigits: digits, maximumFractionDigits: digits })
+    formatters.set(key, instance)
+  }
+  return instance
+}
+
+const MONEY_LOCALE: Record<Lang, string> = {
+  fr: 'fr-FR',
+  de: 'de-DE',
+  sl: 'sl-SI',
+  en: 'en-AU',
+  da: 'da-DK',
+  nl: 'nl-NL',
+}
+
+export function setMoneyLocale(lang: Lang) {
+  moneyLocale = MONEY_LOCALE[lang] ?? 'fr-FR'
+}
+
+export const money = (value: number) => (Number.isInteger(value) ? formatter(0) : formatter(2)).format(value)

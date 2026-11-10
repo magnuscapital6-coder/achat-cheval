@@ -7,6 +7,8 @@ import { Footer } from './components/Footer'
 import { Nav } from './components/Nav'
 import { CartProvider } from './lib/cart'
 import { CatalogueProvider } from './lib/catalogue'
+import { LocaleProvider, currentMarket } from './lib/i18n'
+import { useSeo } from './lib/useSeo'
 import { About } from './pages/About'
 import { Admin } from './pages/Admin'
 import { Checkout, OrderConfirmed } from './pages/Checkout'
@@ -19,6 +21,11 @@ function ScrollToTop() {
   useEffect(() => {
     window.scrollTo({ top: 0 })
   }, [pathname])
+  return null
+}
+
+function Seo() {
+  useSeo()
   return null
 }
 
@@ -50,17 +57,23 @@ function Pages() {
 }
 
 export function App() {
+  // Le marché vient du préfixe d'URL (/de, /sl, /fr-be…) : tout le reste de
+  // l'app reste écrit avec des chemins sans préfixe, et React Router les
+  // recompose grâce au basename.
   return (
-    <BrowserRouter>
-      <CatalogueProvider>
-        <CartProvider>
-          <ScrollToTop />
-          <Nav />
-          <Pages />
-          <Footer />
-          <CartDrawer />
-        </CartProvider>
-      </CatalogueProvider>
-    </BrowserRouter>
+    <LocaleProvider>
+      <BrowserRouter basename={currentMarket.prefix || undefined}>
+        <CatalogueProvider>
+          <CartProvider>
+            <Seo />
+            <ScrollToTop />
+            <Nav />
+            <Pages />
+            <Footer />
+            <CartDrawer />
+          </CartProvider>
+        </CatalogueProvider>
+      </BrowserRouter>
+    </LocaleProvider>
   )
 }

@@ -8,21 +8,10 @@ import { useCatalogue } from '../lib/catalogue'
 import { ProductCard } from '../components/ProductCard'
 import { Button, Container } from '../components/ui'
 import { cx } from '../lib/cx'
-
-const categoryOptions: { key: Category; label: string }[] = categories.map((c) => ({ key: c.key, label: c.label }))
-const priceOptions = [
-  { key: '', label: 'Tous les prix' },
-  { key: '0-10000', label: 'Moins de 10 000 €' },
-  { key: '10000-25000', label: '10 000 à 25 000 €' },
-  { key: '25000-', label: 'Plus de 25 000 €' },
-]
-const sortOptions = [
-  { key: 'featured', label: 'En vedette' },
-  { key: 'price-asc', label: 'Prix croissant' },
-  { key: 'price-desc', label: 'Prix décroissant' },
-]
+import { categoryKey, useI18n } from '../lib/i18n'
 
 export function Shop() {
+  const { t } = useI18n()
   const { products, own } = useCatalogue()
   const ownSlugs = useMemo(() => new Set(own.map((listing) => listing.slug)), [own])
   const [params, setParams] = useSearchParams()
@@ -30,6 +19,19 @@ export function Shop() {
   const category = params.get('category') ?? ''
   const price = params.get('price') ?? ''
   const sort = params.get('sort') ?? 'featured'
+
+  const categoryOptions: { key: Category; label: string }[] = categories.map((c) => ({ key: c.key, label: t(categoryKey(c.key)) }))
+  const priceOptions = [
+    { key: '', label: t('shop.priceAll') },
+    { key: '0-10000', label: t('shop.priceLow') },
+    { key: '10000-25000', label: t('shop.priceMid') },
+    { key: '25000-', label: t('shop.priceHigh') },
+  ]
+  const sortOptions = [
+    { key: 'featured', label: t('shop.sortFeatured') },
+    { key: 'price-asc', label: t('shop.sortAsc') },
+    { key: 'price-desc', label: t('shop.sortDesc') },
+  ]
 
   function update(next: Record<string, string>) {
     const merged = new URLSearchParams(params)
@@ -53,20 +55,20 @@ export function Shop() {
     return items
   }, [products, ownSlugs, category, price, sort])
 
-  const title = categoryOptions.find((c) => c.key === category)?.label ?? 'Tout le catalogue'
+  const title = categoryOptions.find((c) => c.key === category)?.label ?? t('shop.all')
   const activeCount = (category ? 1 : 0) + (price ? 1 : 0)
 
   const filters = (
     <div className="flex flex-col gap-8">
-      <FilterGroup label="Catégorie">
-        {[{ key: '', label: 'Tout' }, ...categoryOptions].map((c) => (
+      <FilterGroup label={t('shop.category')}>
+        {[{ key: '', label: t('shop.allCategory') }, ...categoryOptions].map((c) => (
           <FilterOption key={c.key} active={category === c.key} onClick={() => update({ category: c.key })}>
             {c.label}
             <span className="ml-auto text-[12.5px] tabular-nums text-faint">{c.key ? products.filter((p) => p.category === c.key).length : products.length}</span>
           </FilterOption>
         ))}
       </FilterGroup>
-      <FilterGroup label="Prix">
+      <FilterGroup label={t('shop.price')}>
         {priceOptions.map((p) => (
           <FilterOption key={p.key} active={price === p.key} onClick={() => update({ price: p.key })}>
             {p.label}
@@ -80,7 +82,7 @@ export function Shop() {
     <Container className="pt-10 sm:pt-14">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[14px] text-muted">Boutique</p>
+          <p className="text-[14px] text-muted">{t('shop.eyebrow')}</p>
           <h1 className="font-display mt-2 text-[44px] sm:text-[56px]">
             {title} <span className="text-[24px] text-faint">{list.length}</span>
           </h1>
@@ -88,10 +90,11 @@ export function Shop() {
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" className="lg:hidden" onClick={() => setMobileOpen(true)}>
             <SlidersHorizontal />
-            Filtres{activeCount > 0 && ` (${activeCount})`}
+            {t('shop.filters')}
+            {activeCount > 0 && ` (${activeCount})`}
           </Button>
           <label className="relative">
-            <span className="sr-only">Trier</span>
+            <span className="sr-only">{t('shop.sort')}</span>
             <select value={sort} onChange={(e) => update({ sort: e.target.value })} className="h-10 appearance-none rounded-[12px] border border-line-strong bg-transparent pl-4 pr-9 text-[14px] focus:border-fg focus:outline-none">
               {sortOptions.map((s) => (
                 <option key={s.key} value={s.key}>
@@ -122,9 +125,9 @@ export function Shop() {
           </motion.div>
           {list.length === 0 && (
             <div className="py-24 text-center">
-              <p className="font-display text-[32px]">Rien dans cette sélection</p>
+              <p className="font-display text-[32px]">{t('shop.empty')}</p>
               <Button variant="secondary" className="mt-6" onClick={() => update({ category: '', price: '' })}>
-                Effacer les filtres
+                {t('shop.clear')}
               </Button>
             </div>
           )}
@@ -143,14 +146,14 @@ export function Shop() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between">
-                <p className="font-display text-[28px]">Filtres</p>
-                <button type="button" aria-label="Fermer" onClick={() => setMobileOpen(false)} className="grid size-10 place-items-center rounded-control hover:bg-surface-2">
+                <p className="font-display text-[28px]">{t('shop.filters')}</p>
+                <button type="button" aria-label={t('nav.close')} onClick={() => setMobileOpen(false)} className="grid size-10 place-items-center rounded-control hover:bg-surface-2">
                   <X className="size-5" />
                 </button>
               </div>
               <div className="mt-6">{filters}</div>
               <Button className="mt-8 w-full" onClick={() => setMobileOpen(false)}>
-                Afficher {list.length} {list.length === 1 ? 'résultat' : 'résultats'}
+                {t('shop.show', { count: list.length })}
               </Button>
             </motion.div>
           </motion.div>

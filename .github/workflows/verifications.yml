@@ -1,0 +1,31 @@
+name: Vérifications
+
+# Le typage et le build suffisent à attraper l'essentiel : le Worker et les
+# assets sont produits par la même commande que celle utilisée pour déployer.
+on:
+  push:
+
+concurrency:
+  group: verifications-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typage-et-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Vite 8 demande Node 22.12 au minimum ; 24 est la LTS au moment de
+          # l'écriture du dépôt.
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typage
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build

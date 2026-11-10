@@ -309,6 +309,95 @@ describe('envoi de messages', () => {
   })
 })
 
+// Le vrai Resend n'est jamais appelé : `globalThis.fetch` est remplacé le
+// temps d'un test par une réponse choisie, qui garde la requête reçue. Les
+// tests et le Worker partagent le même contexte (SELF), le remplacement vaut
+// donc aussi pour l'appel sortant du Worker.
+type SentMail = { from: string; to: string[]; subject: string; text: string; html: string; authorization: string }
+
+function mockResend(status: number, answer: unknown = { id: 're_message_de_test' }) {
+  const calls: SentMail[] = []
+  const original = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init)
+    if (new URL(request.url).host !== 'api.resend.com') throw new Error(`Appel sortant inattendu : ${request.url}`)
+    calls.push({
+      ...((await request.json()) as Omit<SentMail, 'authorization'>),
+      authorization: request.headers.get('authorization') ?? '',
+    })
+    return new Response(JSON.stringify(answer), { status, headers: { 'content-type': 'application/json' } })
+  }) as typeof fetch
+  return { calls, restore: () => void (globalThis.fetch = original) }
+}
+
+describe('envoi réussi via Resend', () => {
+  it('remplit le message, l’envoie et le marque « envoye »', async () => {
+    const reference = await latestReference()
+    env.RESEND_API_KEY = 'cle-de-test'
+    const resend = mockResend(200)
+    try {
+      const response = await post(
+        '/api/admin/messages',
+        {
+          to: 'Acheteur@Example.com',
+          template: 'paiement-recu',
+          reference,
+          subject: 'Paiement reçu — {{reference}}',
+          body: 'Bonjour,\n\nNous avons bien reçu {{total}} le {{date}}.\n\n{{articles}}\n\n{{boutique}}',
+        },
+        admin(),
+      )
+      expect(response.status).toBe(200)
+      await expect(response.json()).resolves.toMatchObject({ status: 'envoye', subject: `Paiement reçu — ${reference}` })
+
+      // Un seul appel sortant, vers Resend, avec le message rempli.
+      expect(resend.calls).toHaveLength(1)
+      const mail = resend.calls[0]
+      expect(mail?.authorization).toBe('Bearer cle-de-test')
+      expect(mail?.to).toEqual(['acheteur@example.com'])
+      expect(mail?.subject).toBe(`Paiement reçu — ${reference}`)
+      expect(plain(mail?.text ?? '')).toContain('Nous avons bien reçu 58 000 € le')
+      // Le HTML porte le même texte, balisé : les jetons y sont remplis aussi.
+      const html = plain((mail?.html ?? '').replace(/<[^>]+>/g, ' '))
+      expect(html).toContain('Nous avons bien reçu 58 000 € le')
+      expect(html).toContain('achat-cheval')
+
+      const row = await env.DB.prepare(
+        'SELECT email, subject, status, detail FROM admin_messages ORDER BY id DESC LIMIT 1',
+      ).first<{ email: string; subject: string; status: string; detail: string }>()
+      expect(row).toMatchObject({ email: 'acheteur@example.com', status: 'envoye', detail: '' })
+    } finally {
+      resend.restore()
+      env.RESEND_API_KEY = ''
+    }
+  })
+
+  it('journalise « echec » quand Resend refuse, sans perdre le message', async () => {
+    const reference = await latestReference()
+    env.RESEND_API_KEY = 'cle-refusee'
+    const resend = mockResend(422, { message: 'Domaine non vérifié', name: 'validation_error' })
+    try {
+      const response = await post(
+        '/api/admin/messages',
+        { to: 'acheteur@example.com', reference, subject: 'Test refus', body: 'Un message assez long pour passer.' },
+        admin(),
+      )
+      expect(response.status).toBe(502)
+      await expect(response.json()).resolves.toMatchObject({ status: 'echec' })
+
+      const row = await env.DB.prepare('SELECT status, detail FROM admin_messages ORDER BY id DESC LIMIT 1').first<{
+        status: string
+        detail: string
+      }>()
+      expect(row).toMatchObject({ status: 'echec' })
+      expect(row?.detail).toContain('Resend')
+    } finally {
+      resend.restore()
+      env.RESEND_API_KEY = ''
+    }
+  })
+})
+
 async function latestReference() {
   const row = await env.DB.prepare('SELECT reference FROM orders ORDER BY created_at DESC LIMIT 1').first<{ reference: string }>()
   if (!row) throw new Error('Aucune commande en base pour le test.')

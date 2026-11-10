@@ -25,7 +25,13 @@ liste réservée), commandes (total recalculé depuis le catalogue, prix du
 navigateur ignoré), demandes de visite, connexion admin (403 hors origine,
 401 mauvais mot de passe, session listée et refermée), modèles (semis, édition,
 validations) et envoi de messages (jetons remplis, journal `admin_messages`,
-statut « sans clé »). Le badge en tête de ce
+statut « sans clé »).
+
+L'envoi réel est simulé : le test remplace `globalThis.fetch` le temps d'un cas
+et répond à la place de Resend — succès (`200`, statut « envoye », en-tête
+`Bearer`, objet et texte réellement transmis) comme refus (`422`, statut
+« echec », message conservé). Aucun e-mail ne sort de la CI, et aucun réseau
+donc aucun faux négatif si Resend tombe. Le badge en tête de ce
 fichier affiche l'état du workflow sur `main` — `passing` ou `failing` — le
 résultat du dernier commit poussé sur cette branche, et ouvre le workflow au
 clic. GitHub ne sert ce badge que pour un dépôt public : le garder privé
